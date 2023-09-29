@@ -15,12 +15,12 @@ class ReverseTrajGen():
         'open_close': [
             (OpenBox, CloseBox),
             (OpenDoor, CloseDoor),
-            (OpenDrawer, CloseDrawer),
-            (OpenFridge, CloseFridge),
-            (OpenGrill, CloseGrill),
-            (OpenJar, CloseJar),
-            (OpenMicrowave, CloseMicrowave),
-            (ToiletSeatUp, ToiletSeatDown)
+            # (OpenDrawer, CloseDrawer),
+            # (OpenFridge, CloseFridge),
+            # (OpenGrill, CloseGrill),
+            # (OpenJar, CloseJar),
+            # (OpenMicrowave, CloseMicrowave),
+            # (ToiletSeatUp, ToiletSeatDown)
         ],
         'on_off': [
             (LampOn, LampOff),
@@ -79,16 +79,16 @@ class ReverseTrajGen():
             demo_dict['right_shoulder_mask'].append(obs.right_shoulder_mask)
             demo_dict['right_shoulder_depth'].append(obs.right_shoulder_depth)
             # demo_dict['right_shoulder_point_cloud'].append(obs.right_shoulder_point_cloud)
-            demo_dict['overhead_rgb'].append(obs.overhead_rgb)
-            demo_dict['overhead_mask'].append(obs.overhead_mask)
-            demo_dict['overhead_depth'].append(obs.overhead_depth)
+            # demo_dict['overhead_rgb'].append(obs.overhead_rgb)
+            # demo_dict['overhead_mask'].append(obs.overhead_mask)
+            # demo_dict['overhead_depth'].append(obs.overhead_depth)
             # demo_dict['overhead_point_cloud'].append(obs.overhead_point_cloud)
             demo_dict['wrist_rgb'].append(obs.wrist_rgb)
             demo_dict['wrist_mask'].append(obs.wrist_mask)
             demo_dict['wrist_depth'].append(obs.wrist_depth)
             # demo_dict['wrist_point_cloud'].append(obs.wrist_point_cloud)
             demo_dict['joint_positions'].append(obs.joint_positions)
-            # demo_dict['joint_velocities'].append(obs.joint_velocities)
+            demo_dict['joint_velocities'].append(obs.joint_velocities)
             demo_dict['gripper_pose'].append(obs.gripper_pose)
             demo_dict['gripper_open'].append(obs.gripper_open)
         
@@ -100,10 +100,10 @@ class ReverseTrajGen():
         task_pairs = self.reverse_task_pairs[category]
         for i, (Forward, Backward) in enumerate(task_pairs):
             for j in range(num_demos_per_task):
-                demo_pair = {'forward': self.get_demo(Forward), 
-                             'backward': self.get_demo(Backward)}
-                with lzma.open(os.path.join(dataset_path, f'{category}/demo_{(j+1)*10+(i+1)}.pickle'), 'wb') as f:
-                    pickle.dump(demo_pair, f)                             
+                with open(os.path.join(dataset_path, f'{category}/demo_forward_{(j+1)*10+(i+1)}.pickle'), 'wb') as f:
+                    pickle.dump(self.get_demo(Forward), f)   
+                with open(os.path.join(dataset_path, f'{category}/demo_backward_{(j+1)*10+(i+1)}.pickle'), 'wb') as f:
+                    pickle.dump(self.get_demo(Backward), f)                             
 
-# traj_gen = ReverseTrajGen(headless=True)
-# traj_gen.generate_data(category='open_close', dataset_path='dataset/', num_demos_per_task=100)
+traj_gen = ReverseTrajGen(headless=True)
+traj_gen.generate_data(category='open_close', dataset_path='dataset/', num_demos_per_task=100)

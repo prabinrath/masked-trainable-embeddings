@@ -15,9 +15,9 @@ from tap import Tap
 from torch.utils.data import DataLoader
 from typing import List
 
-from src.lightning_logging import MetricLogger
-from src.models import CAE
-from src.preprocessing import get_dataset
+from experiments.lightning_logging import MetricLogger
+from experiments.models import CAE
+from experiments.preprocessing import get_dataset
 
 import numpy as np
 import os
