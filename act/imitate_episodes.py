@@ -1,6 +1,7 @@
 import torch
 import numpy as np
 import os, sys
+import json
 import pickle
 import argparse
 import matplotlib.pyplot as plt
@@ -133,19 +134,19 @@ def main(args):
     train_dataloader, val_dataloader = load_rlbench_data(
         dataset_dir=dataset_dir,
         required_data_keys=required_data_keys,
-        task_filter_key=ReverseTrajDataset.task_filter_map["box"],
-        chunk_size=100,
+        task_filter_key=ReverseTrajDataset.task_filter_map[
+            task_name.replace("sim_", "")
+        ],
+        chunk_size=args["chunk_size"],
         norm_bound=FRANKA_JOINT_LIMITS,
     )
-    # train_dataloader, val_dataloader, stats, _ = load_data(
-    #     dataset_dir, num_episodes, camera_names, batch_size_train, batch_size_val
-    # )
-    # save dataset stats
+
+    # Save configuration
     if not os.path.isdir(ckpt_dir):
         os.makedirs(ckpt_dir)
-    # stats_path = os.path.join(ckpt_dir, f"dataset_stats.pkl")
-    # with open(stats_path, "wb") as f:
-    #     pickle.dump(stats, f)
+    json_path = os.path.join(ckpt_dir, f"config.json")
+    with open(json_path, "w") as f:
+        json.dump(config, f, ensure_ascii=False, indent=4)
 
     best_ckpt_info = train_bc(train_dataloader, val_dataloader, config)
     best_epoch, min_val_loss, best_state_dict = best_ckpt_info
@@ -549,3 +550,7 @@ if __name__ == "__main__":
     parser.add_argument("--temporal_agg", action="store_true")
 
     main(vars(parser.parse_args()))
+
+
+# Command line execution
+# python3  imitate_episodes.py --task_name sim_open_close --ckpt_dir /home/local/ASUAD/opatil3/checkpoints/act_open_close_100 --policy_class ACT --kl_weight 10 --chunk_size 100 --hidden_dim 512 --batch_size 128 --dim_feedforward 3200 --num_epochs 2000  --lr 1e-5 --seed 0

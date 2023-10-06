@@ -5,6 +5,7 @@ import pickle
 import glob
 import os
 import random
+import re
 
 CONFIG_DIM = 7  # joint space
 
@@ -49,35 +50,14 @@ class ConfigMinMaxNormalization(object):
 class ReverseTrajDataset(Dataset):
     """
     Dataset for robot trajectory for BC.
-    Parameters
-    ---------
-    file_list: default=[]
-        List of file episodes
-    required_data_keys: default=[]
-        Keys to extract from the recorded demonstrations
-    chunk_size: default=10,
-        Chunk of action size to return
-    norm_bound: default==None,
-        Bounds for normalizing the data
-
-    Notes
-    -----
-    Possible set of keys in the recorded demonstrations
-    [
-        'front_rgb', 'front_mask', 'front_depth', 'front_point_cloud',
-        'left_shoulder_rgb', 'left_shoulder_mask', 'left_shoulder_depth',
-        'left_shoulder_point_cloud', 'right_shoulder_rgb', 'right_shoulder_mask',
-        'right_shoulder_depth', 'right_shoulder_point_cloud', 'overhead_rgb',
-        'overhead_mask', 'overhead_depth', 'overhead_point_cloud', 'wrist_rgb',
-        'wrist_mask', 'wrist_depth', 'wrist_point_cloud', 'joint_positions',
-        'joint_velocities', 'gripper_pose', 'gripper_open'
-    ]
-
-    Keys returned are:
-        [images, joint_action, is_pad, gripper_action ...]
     """
 
-    task_filter_map = {"box": 1, "door": 2}
+    task_filter_map = {
+        "box_open": re.compile(r"forward_[\d]*1.pickle"),
+        "box_close": re.compile(r"backward_[\d]*1.pickle"),
+        "door_open": re.compile(r"forward_[\d]*2.pickle"),
+        "door_close": re.compile(r"backward_[\d]*1.pickle"),
+    }
     # This order needs to be consistent with what you pass while training
     camera_names = [
         "front_rgb",
@@ -179,7 +159,7 @@ class ReverseTrajDataset(Dataset):
 
 def load_data(
     dataset_dir,
-    task_filter_key=ReverseTrajDataset.task_filter_map["box"],
+    task_filter_key=ReverseTrajDataset.task_filter_map["box_open"],
     required_data_keys=[
         "front_rgb",
         "left_shoulder_rgb",
@@ -193,13 +173,53 @@ def load_data(
     batch_size=8,
     train_split=0.8,
 ):
+    """
+    Method to return a Dataloader of manipulator demonstrations
+    Parameters
+    ---------
+    dataset_dir
+        Location where the demonstrations are saved
+    task_filter_keys: re.compile object
+        Regex to extract specific tasks from the recorded demonstrations-
+        use ReverseTrajDataset.task_filter_map
+    required_data_keys: default=["front_rgb", "left_shoulder_rgb", "right_shoulder_rgb",
+        "wrist_rgb", "joint_positions", "gripper_open"]
+        Features to extract for an episode
+    chunk_size: default=100,
+        Chunk of action size to return
+    norm_bound: default==None,
+        Bounds for normalizing the data
+    batch_size: int; default=8
+        Size of the batch
+    train_split: float; default=0.8
+        Train-test split
+
+    Notes
+    -----
+    Possible set of keys in the recorded demonstrations
+    [
+        'front_rgb', 'front_mask', 'front_depth', 'front_point_cloud',
+        'left_shoulder_rgb', 'left_shoulder_mask', 'left_shoulder_depth',
+        'left_shoulder_point_cloud', 'right_shoulder_rgb', 'right_shoulder_mask',
+        'right_shoulder_depth', 'right_shoulder_point_cloud', 'overhead_rgb',
+        'overhead_mask', 'overhead_depth', 'overhead_point_cloud', 'wrist_rgb',
+        'wrist_mask', 'wrist_depth', 'wrist_point_cloud', 'joint_positions',
+        'joint_velocities', 'gripper_pose', 'gripper_open'
+    ]
+    Keys returned by the dataloaders are:
+        [images, joint_action, is_pad, gripper_action ...]
+
+    Returns
+    -------
+    train_loader, val_loader
+    """
+
     file_list = []
     for file in glob.glob(os.path.join(dataset_dir, "*.pickle")):
         if task_filter_key is None:
             file_list.append(file)
         else:
-            task_type_key = int(file.split(".")[-2].split("_")[-1]) % 10
-            if task_type_key == task_filter_key:
+            if task_filter_key.search(file):
                 file_list.append(file)
     random.shuffle(file_list)
 

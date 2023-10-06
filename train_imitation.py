@@ -23,7 +23,7 @@ def main():
     train_loader, val_dataset = load_data(
         dataset_dir="/home/local/ASUAD/opatil3/datasets/sim_open_close",
         required_data_keys=required_data_keys,
-        task_filter_key=ReverseTrajDataset.task_filter_map["box"],
+        task_filter_key=ReverseTrajDataset.task_filter_map["door_close"],
         chunk_size=100,
         norm_bound=FRANKA_JOINT_LIMITS,
     )

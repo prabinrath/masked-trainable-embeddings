@@ -15,9 +15,42 @@ SIM_TASK_CONFIGS = {
         "episode_len": 400,
         "camera_names": ["top"],
     },
-    "sim_open_close": {
+    "sim_box_open": {
         "dataset_dir": DATA_DIR + "/sim_open_close",
-        "num_episodes": 50,
+        "num_episodes": 100,
+        "episode_len": 250,
+        "camera_names": [
+            "front_rgb",
+            "left_shoulder_rgb",
+            "right_shoulder_rgb",
+            "wrist_rgb",
+        ],
+    },
+    "sim_box_close": {
+        "dataset_dir": DATA_DIR + "/sim_open_close",
+        "num_episodes": 100,
+        "episode_len": 250,
+        "camera_names": [
+            "front_rgb",
+            "left_shoulder_rgb",
+            "right_shoulder_rgb",
+            "wrist_rgb",
+        ],
+    },
+    "sim_door_open": {
+        "dataset_dir": DATA_DIR + "/sim_open_close",
+        "num_episodes": 100,
+        "episode_len": 250,
+        "camera_names": [
+            "front_rgb",
+            "left_shoulder_rgb",
+            "right_shoulder_rgb",
+            "wrist_rgb",
+        ],
+    },
+    "sim_door_close": {
+        "dataset_dir": DATA_DIR + "/sim_open_close",
+        "num_episodes": 100,
         "episode_len": 250,
         "camera_names": [
             "front_rgb",
