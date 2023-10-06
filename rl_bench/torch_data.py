@@ -170,9 +170,9 @@ class ReverseTrajDataset(Dataset):
             data_batch["is_pad"] = torch.from_numpy(is_pad).bool()
 
         assert data_batch["images"].shape == torch.Size([4, 3, 128, 128])
-        assert data_batch["is_pad"].shape == torch.Size([100])
-        assert data_batch["joint_action"].shape == torch.Size([100, 7])
-        assert data_batch["gripper_action"].shape == torch.Size([100])
+        assert data_batch["is_pad"].shape == torch.Size([self.chunk_size])
+        assert data_batch["joint_action"].shape == torch.Size([self.chunk_size, 7])
+        assert data_batch["gripper_action"].shape == torch.Size([self.chunk_size])
 
         return data_batch
 
