@@ -11,10 +11,13 @@ obs_config = ObservationConfig()
 obs_config.set_all(True)
 
 env = Environment(
-    action_mode=MoveArmThenGripper(arm_action_mode=JointPosition(), gripper_action_mode=Discrete()),
+    action_mode=MoveArmThenGripper(
+        arm_action_mode=JointPosition(), gripper_action_mode=Discrete()
+    ),
     obs_config=ObservationConfig(),
-    robot_setup='panda',
-    headless=False)
+    robot_setup="panda",
+    headless=False,
+)
 env.launch()
 
 steps_per_task = 100
@@ -24,14 +27,14 @@ task = env.get_task(CloseDrawer)
 task.sample_variation()  # random variation
 demo = task.get_demos(1, live_demos=True)
 
-# for e in range(num_episodes):
-#     print('Reset Episode')
-#     descriptions, obs = task.reset()
-#     for i in range(steps_per_task):
-#         action = np.random.random(env.action_shape)
-#         start = time.perf_counter()
-#         obs, reward, terminate = task.step(action)
-#         print(f'step time: {time.perf_counter()-start}')
+for e in range(num_episodes):
+    print("Reset Episode")
+    descriptions, obs = task.reset()
+    for i in range(steps_per_task):
+        action = np.random.random(env.action_shape)
+        start = time.perf_counter()
+        obs, reward, terminate = task.step(action)
+        print(f"step time: {time.perf_counter()-start}")
 
-print('Done')
+print("Done")
 env.shutdown()
