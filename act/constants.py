@@ -1,4 +1,5 @@
 import pathlib
+from rlbench.tasks import OpenDoor, OpenBox, CloseBox, CloseDoor
 
 ### Task parameters
 DATA_DIR = "/home/local/ASUAD/opatil3/datasets/"
@@ -16,6 +17,7 @@ SIM_TASK_CONFIGS = {
         "camera_names": ["top"],
     },
     "sim_box_open": {
+        "rlbench_env": OpenBox,
         "dataset_dir": DATA_DIR + "/sim_open_close",
         "num_episodes": 100,
         "episode_len": 250,
@@ -27,6 +29,7 @@ SIM_TASK_CONFIGS = {
         ],
     },
     "sim_box_close": {
+        "rlbench_env": CloseBox,
         "dataset_dir": DATA_DIR + "/sim_open_close",
         "num_episodes": 100,
         "episode_len": 250,
@@ -38,6 +41,7 @@ SIM_TASK_CONFIGS = {
         ],
     },
     "sim_door_open": {
+        "rlbench_env": OpenDoor,
         "dataset_dir": DATA_DIR + "/sim_open_close",
         "num_episodes": 100,
         "episode_len": 250,
@@ -49,6 +53,7 @@ SIM_TASK_CONFIGS = {
         ],
     },
     "sim_door_close": {
+        "rlbench_env": CloseDoor,
         "dataset_dir": DATA_DIR + "/sim_open_close",
         "num_episodes": 100,
         "episode_len": 250,

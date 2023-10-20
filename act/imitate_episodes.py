@@ -29,7 +29,6 @@ from rlbench.action_modes.arm_action_modes import JointVelocity, JointPosition
 from rlbench.action_modes.gripper_action_modes import Discrete
 from rlbench.environment import Environment
 from rlbench.observation_config import ObservationConfig
-from rlbench.tasks import OpenDoor, OpenBox, CloseBox, CloseDoor
 import time
 
 e = IPython.embed
@@ -57,18 +56,14 @@ def main(args):
 
     # get task parameters
     is_sim = task_name[:4] == "sim_"
-    if is_sim:
-        from constants import SIM_TASK_CONFIGS
+    from constants import SIM_TASK_CONFIGS
 
-        task_config = SIM_TASK_CONFIGS[task_name]
-    else:
-        from aloha_scripts.constants import TASK_CONFIGS
-
-        task_config = TASK_CONFIGS[task_name]
+    task_config = SIM_TASK_CONFIGS[task_name]
     dataset_dir = task_config["dataset_dir"]
     num_episodes = task_config["num_episodes"]
     episode_len = task_config["episode_len"]
     camera_names = task_config["camera_names"]
+    rlbench_env = task_config["rlbench_env"]
 
     # fixed parameters
     state_dim = 8
@@ -117,6 +112,7 @@ def main(args):
         "temporal_agg": args["temporal_agg"],
         "camera_names": camera_names,
         "real_robot": not is_sim,
+        "rlbench_env": rlbench_env,
     }
 
     if is_eval:
@@ -206,10 +202,9 @@ def eval_bc(config, ckpt_name, save_episode=True):
     policy_config = config["policy_config"]
     camera_names = config["camera_names"]
     max_timesteps = config["episode_len"]
-    # TODO changed maxtimestep
-    task_name = config["task_name"]
     temporal_agg = config["temporal_agg"]
     onscreen_cam = "angle"
+    rlbench_env = config["rlbench_env"]
 
     # load policy and stats
 
@@ -220,7 +215,6 @@ def eval_bc(config, ckpt_name, save_episode=True):
     policy.cuda()
     policy.eval()
     print(f"Loaded: {ckpt_path}")
-    stats_path = os.path.join(ckpt_dir, f"dataset_stats.pkl")
 
     #  A simple MinMax transformation
     min_bound = FRANKA_JOINT_LIMITS[:, 0]
@@ -232,39 +226,21 @@ def eval_bc(config, ckpt_name, save_episode=True):
         lambda s_pos: 1.0 * ((s_pos + 1) / 2) * (max_bound - min_bound) + min_bound
     )
 
-    # load environment
-    if real_robot:
-        from aloha_scripts.robot_utils import move_grippers  # requires aloha
-        from aloha_scripts.real_env import make_real_env  # requires aloha
+    # load simulation environment
+    obs_config = ObservationConfig()
+    obs_config.set_all(True)
 
-        env = make_real_env(init_node=True)
-        env_max_reward = 0
-    else:
-        obs_config = ObservationConfig()
-        obs_config.set_all(True)
-
-        env = Environment(
-            action_mode=MoveArmThenGripper(
-                arm_action_mode=JointPosition(), gripper_action_mode=Discrete()
-            ),
-            obs_config=ObservationConfig(),
-            robot_setup="panda",
-            headless=False,
-        )
-
-        env.launch()
-
-        steps_per_task = 100
-        num_episodes = 5
-
-        # task = env.get_task(OpenDoor)
-        task = env.get_task(CloseDoor)
-
-        # task = env.get_task(OpenBox)
-        # task = env.get_task(CloseBox)
-
-        # demo = task.get_demos(1, live_demos=True)
-
+    env = Environment(
+        action_mode=MoveArmThenGripper(
+            arm_action_mode=JointPosition(), gripper_action_mode=Discrete()
+        ),
+        obs_config=ObservationConfig(),
+        robot_setup="panda",
+        headless=not onscreen_render,
+    )
+    env.launch()
+    task = env.get_task(rlbench_env)
+    env_max_reward = 1  # Hardcoded as we don't do reward shaping
     query_frequency = policy_config["num_queries"]
     if temporal_agg:
         query_frequency = 1
@@ -278,7 +254,7 @@ def eval_bc(config, ckpt_name, save_episode=True):
     for rollout_id in range(num_rollouts):
         rollout_id += 0
 
-        descriptions, obs = task.reset()
+        _, obs = task.reset()
 
         ### evaluation loop
         if temporal_agg:
@@ -291,13 +267,8 @@ def eval_bc(config, ckpt_name, save_episode=True):
         qpos_list = []
         target_qpos_list = []
         rewards = []
-        print(num_rollouts)
         with torch.inference_mode():
-            # TODO Changed the max_timestep
-
             for t in range(max_timesteps):
-                start = time.perf_counter()
-
                 joint_position = pre_process(obs.joint_positions)
                 qpos_numpy = np.array(np.hstack([joint_position, obs.gripper_open]))
                 qpos = torch.from_numpy(qpos_numpy).float().cuda().unsqueeze(0)
@@ -339,7 +310,6 @@ def eval_bc(config, ckpt_name, save_episode=True):
 
                 ### step the environment
                 obs, reward, terminate = task.step(target_qpos)
-                print(f"step time: {time.perf_counter()-start}")
 
                 ### for visualization
                 qpos_list.append(qpos_numpy)
@@ -353,9 +323,8 @@ def eval_bc(config, ckpt_name, save_episode=True):
         episode_returns.append(episode_return)
         episode_highest_reward = np.max(rewards)
         highest_rewards.append(episode_highest_reward)
-        # TODO Changed the envmax rewar; refer to the original file
         print(
-            f"Rollout {rollout_id}\n{episode_return=}, {episode_highest_reward=}, Success: {episode_highest_reward}"
+            f"Rollout {rollout_id}\n{episode_return=}, {episode_highest_reward=}, {env_max_reward=}, Success: {episode_highest_reward==env_max_reward}"
         )
 
     success_rate = np.mean(np.array(highest_rewards) == env_max_reward)
@@ -397,7 +366,6 @@ def forward_pass(data, policy):
         action.cuda(),
         is_pad.cuda(),
     )
-    # breakpoint()
     return policy(qpos, images, action, is_pad)  # TODO remove None
 
 
@@ -557,3 +525,7 @@ if __name__ == "__main__":
 
 # Command line execution
 # python3  imitate_episodes.py --task_name sim_open_close --ckpt_dir /home/local/ASUAD/opatil3/checkpoints/act_open_close_100 --policy_class ACT --kl_weight 10 --chunk_size 100 --hidden_dim 512 --batch_size 128 --dim_feedforward 3200 --num_epochs 2000  --lr 1e-5 --seed 0
+
+
+# Eval
+# python3  imitate_episodes.py --task_name sim_box_close --ckpt_dir /home/local/ASUAD/opatil3/checkpoints/act_box_close_100 --policy_class ACT --kl_weight 10 --chunk_size 100 --hidden_dim 512 --batch_size 128 --dim_feedforward 3200 --num_epochs 2000 --lr 1e-5 --seed 0 --eval --onscreen_render
