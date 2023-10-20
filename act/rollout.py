@@ -21,17 +21,14 @@ from sim_env import BOX_POSE
 
 # sys.path.append("/home/local/ASUAD/opatil3/src/robot-latent-actions")
 
-from rl_bench.torch_data import ReverseTrajDataset
-from rl_bench.torch_data import load_data as load_rlbench_data
-
-
+from act.rl_bench.torch_data import load_data as load_rlbench_data
 
 from rlbench.action_modes.action_mode import MoveArmThenGripper
 from rlbench.action_modes.arm_action_modes import JointVelocity, JointPosition
 from rlbench.action_modes.gripper_action_modes import Discrete
 from rlbench.environment import Environment
 from rlbench.observation_config import ObservationConfig
-from rlbench.tasks import CloseDrawer,OpenDoor,OpenBox,CloseBox,CloseDoor
+from rlbench.tasks import OpenDoor, OpenBox, CloseBox, CloseDoor
 import time
 
 e = IPython.embed
@@ -63,10 +60,7 @@ def main(args):
         from constants import SIM_TASK_CONFIGS
 
         task_config = SIM_TASK_CONFIGS[task_name]
-    else:
-        from aloha_scripts.constants import TASK_CONFIGS
 
-        task_config = TASK_CONFIGS[task_name]
     dataset_dir = task_config["dataset_dir"]
     num_episodes = task_config["num_episodes"]
     episode_len = task_config["episode_len"]
@@ -133,7 +127,6 @@ def main(args):
         print()
         exit()
 
-   
 
 def make_policy(policy_class, policy_config):
     if policy_class == "ACT":
@@ -158,9 +151,8 @@ def make_optimizer(policy_class, policy):
 def get_image(obs, camera_names):
     curr_images = []
     for cam_name in camera_names:
+        curr_image = rearrange(getattr(obs, cam_name), "h w c -> c h w")
 
-        curr_image=rearrange(getattr(obs,cam_name), "h w c -> c h w")
-        
         curr_images.append(curr_image)
     curr_image = np.stack(curr_images, axis=0)
     curr_image = torch.from_numpy(curr_image / 255.0).float().cuda().unsqueeze(0)
@@ -177,7 +169,7 @@ def eval_bc(config, ckpt_name, save_episode=True):
     policy_config = config["policy_config"]
     camera_names = config["camera_names"]
     max_timesteps = config["episode_len"]
-    #TODO changed maxtimestep
+    # TODO changed maxtimestep
     task_name = config["task_name"]
     temporal_agg = config["temporal_agg"]
     onscreen_cam = "angle"
@@ -193,25 +185,26 @@ def eval_bc(config, ckpt_name, save_episode=True):
     print(f"Loaded: {ckpt_path}")
     stats_path = os.path.join(ckpt_dir, f"dataset_stats.pkl")
 
-    #  A simple MinMax transformation 
-    min_bound=FRANKA_JOINT_LIMITS[:,0]
-    max_bound=FRANKA_JOINT_LIMITS[:,1] 
-    pre_process = lambda s_pos: (1.0*(s_pos-min_bound)/(max_bound-min_bound))*2.0-1
-    post_process= lambda s_pos: 1.0*((s_pos+1)/2)*(max_bound-min_bound)+min_bound
-
+    #  A simple MinMax transformation
+    min_bound = FRANKA_JOINT_LIMITS[:, 0]
+    max_bound = FRANKA_JOINT_LIMITS[:, 1]
+    pre_process = (
+        lambda s_pos: (1.0 * (s_pos - min_bound) / (max_bound - min_bound)) * 2.0 - 1
+    )
+    post_process = (
+        lambda s_pos: 1.0 * ((s_pos + 1) / 2) * (max_bound - min_bound) + min_bound
+    )
 
     # load environment
     if real_robot:
         from aloha_scripts.robot_utils import move_grippers  # requires aloha
         from aloha_scripts.real_env import make_real_env  # requires aloha
-        
+
         env = make_real_env(init_node=True)
         env_max_reward = 0
     else:
- 
         obs_config = ObservationConfig()
         obs_config.set_all(True)
-       
 
         env = Environment(
             action_mode=MoveArmThenGripper(
@@ -221,7 +214,7 @@ def eval_bc(config, ckpt_name, save_episode=True):
             robot_setup="panda",
             headless=False,
         )
-    
+
         env.launch()
 
         steps_per_task = 100
@@ -229,19 +222,17 @@ def eval_bc(config, ckpt_name, save_episode=True):
 
         # task = env.get_task(OpenDoor)
         task = env.get_task(CloseDoor)
-         
+
         # task = env.get_task(OpenBox)
         # task = env.get_task(CloseBox)
-    
-        # demo = task.get_demos(1, live_demos=True)
-             
 
+        # demo = task.get_demos(1, live_demos=True)
 
     query_frequency = policy_config["num_queries"]
     if temporal_agg:
         query_frequency = 1
         num_queries = policy_config["num_queries"]
-    
+
     max_timesteps = int(max_timesteps * 1)  # may increase for real-world tasks
 
     num_rollouts = 50
@@ -249,10 +240,8 @@ def eval_bc(config, ckpt_name, save_episode=True):
     highest_rewards = []
     for rollout_id in range(num_rollouts):
         rollout_id += 0
-      
-        
-        descriptions, obs=task.reset()
-        
+
+        descriptions, obs = task.reset()
 
         ### evaluation loop
         if temporal_agg:
@@ -267,13 +256,13 @@ def eval_bc(config, ckpt_name, save_episode=True):
         rewards = []
         print(num_rollouts)
         with torch.inference_mode():
-            #TODO Changed the max_timestep
-            
+            # TODO Changed the max_timestep
+
             for t in range(max_timesteps):
                 start = time.perf_counter()
-               
-                joint_position=pre_process(obs.joint_positions)
-                qpos_numpy = np.array(np.hstack([joint_position,obs.gripper_open]))
+
+                joint_position = pre_process(obs.joint_positions)
+                qpos_numpy = np.array(np.hstack([joint_position, obs.gripper_open]))
                 qpos = torch.from_numpy(qpos_numpy).float().cuda().unsqueeze(0)
                 qpos_history[:, t] = qpos
                 curr_image = get_image(obs, camera_names)
@@ -307,15 +296,13 @@ def eval_bc(config, ckpt_name, save_episode=True):
 
                 ### post-process actions
                 raw_action = raw_action.squeeze(0).cpu().numpy()
-                
-                action = np.hstack([post_process(raw_action[:7]),raw_action[-1]])
+
+                action = np.hstack([post_process(raw_action[:7]), raw_action[-1]])
                 target_qpos = action
 
                 ### step the environment
-                obs,reward,terminate=task.step(target_qpos)
+                obs, reward, terminate = task.step(target_qpos)
                 print(f"step time: {time.perf_counter()-start}")
-
-
 
                 ### for visualization
                 qpos_list.append(qpos_numpy)
@@ -323,7 +310,6 @@ def eval_bc(config, ckpt_name, save_episode=True):
                 rewards.append(reward)
 
             # plt.close()
-     
 
         rewards = np.array(rewards)
         episode_return = np.sum(rewards[rewards != None])
@@ -354,8 +340,6 @@ def eval_bc(config, ckpt_name, save_episode=True):
         f.write(repr(highest_rewards))
 
     return success_rate, avg_return
-
-
 
 
 if __name__ == "__main__":

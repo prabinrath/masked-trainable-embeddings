@@ -21,8 +21,8 @@ from sim_env import BOX_POSE
 
 sys.path.append("/home/local/ASUAD/opatil3/src/robot-latent-actions")
 
-from rl_bench.torch_data import ReverseTrajDataset
-from rl_bench.torch_data import load_data as load_rlbench_data
+from act.rl_bench.torch_data import ReverseTrajDataset
+from act.rl_bench.torch_data import load_data as load_rlbench_data
 
 e = IPython.embed
 
