@@ -24,6 +24,14 @@ sys.path.append("/home/local/ASUAD/opatil3/src/robot-latent-actions")
 from act.rl_bench.torch_data import ReverseTrajDataset
 from act.rl_bench.torch_data import load_data as load_rlbench_data
 
+from rlbench.action_modes.action_mode import MoveArmThenGripper
+from rlbench.action_modes.arm_action_modes import JointVelocity, JointPosition
+from rlbench.action_modes.gripper_action_modes import Discrete
+from rlbench.environment import Environment
+from rlbench.observation_config import ObservationConfig
+from rlbench.tasks import OpenDoor, OpenBox, CloseBox, CloseDoor
+import time
+
 e = IPython.embed
 
 FRANKA_JOINT_LIMITS = np.asarray(
@@ -177,10 +185,11 @@ def make_optimizer(policy_class, policy):
     return optimizer
 
 
-def get_image(ts, camera_names):
+def get_image(obs, camera_names):
     curr_images = []
     for cam_name in camera_names:
-        curr_image = rearrange(ts.observation["images"][cam_name], "h w c -> c h w")
+        curr_image = rearrange(getattr(obs, cam_name), "h w c -> c h w")
+
         curr_images.append(curr_image)
     curr_image = np.stack(curr_images, axis=0)
     curr_image = torch.from_numpy(curr_image / 255.0).float().cuda().unsqueeze(0)
@@ -197,11 +206,13 @@ def eval_bc(config, ckpt_name, save_episode=True):
     policy_config = config["policy_config"]
     camera_names = config["camera_names"]
     max_timesteps = config["episode_len"]
+    # TODO changed maxtimestep
     task_name = config["task_name"]
     temporal_agg = config["temporal_agg"]
     onscreen_cam = "angle"
 
     # load policy and stats
+
     ckpt_path = os.path.join(ckpt_dir, ckpt_name)
     policy = make_policy(policy_class, policy_config)
     loading_status = policy.load_state_dict(torch.load(ckpt_path))
@@ -210,11 +221,16 @@ def eval_bc(config, ckpt_name, save_episode=True):
     policy.eval()
     print(f"Loaded: {ckpt_path}")
     stats_path = os.path.join(ckpt_dir, f"dataset_stats.pkl")
-    with open(stats_path, "rb") as f:
-        stats = pickle.load(f)
 
-    pre_process = lambda s_qpos: (s_qpos - stats["qpos_mean"]) / stats["qpos_std"]
-    post_process = lambda a: a * stats["action_std"] + stats["action_mean"]
+    #  A simple MinMax transformation
+    min_bound = FRANKA_JOINT_LIMITS[:, 0]
+    max_bound = FRANKA_JOINT_LIMITS[:, 1]
+    pre_process = (
+        lambda s_pos: (1.0 * (s_pos - min_bound) / (max_bound - min_bound)) * 2.0 - 1
+    )
+    post_process = (
+        lambda s_pos: 1.0 * ((s_pos + 1) / 2) * (max_bound - min_bound) + min_bound
+    )
 
     # load environment
     if real_robot:
@@ -224,10 +240,30 @@ def eval_bc(config, ckpt_name, save_episode=True):
         env = make_real_env(init_node=True)
         env_max_reward = 0
     else:
-        from sim_env import make_sim_env
+        obs_config = ObservationConfig()
+        obs_config.set_all(True)
 
-        env = make_sim_env(task_name)
-        env_max_reward = env.task.max_reward
+        env = Environment(
+            action_mode=MoveArmThenGripper(
+                arm_action_mode=JointPosition(), gripper_action_mode=Discrete()
+            ),
+            obs_config=ObservationConfig(),
+            robot_setup="panda",
+            headless=False,
+        )
+
+        env.launch()
+
+        steps_per_task = 100
+        num_episodes = 5
+
+        # task = env.get_task(OpenDoor)
+        task = env.get_task(CloseDoor)
+
+        # task = env.get_task(OpenBox)
+        # task = env.get_task(CloseBox)
+
+        # demo = task.get_demos(1, live_demos=True)
 
     query_frequency = policy_config["num_queries"]
     if temporal_agg:
@@ -241,21 +277,8 @@ def eval_bc(config, ckpt_name, save_episode=True):
     highest_rewards = []
     for rollout_id in range(num_rollouts):
         rollout_id += 0
-        ### set task
-        if "sim_transfer_cube" in task_name:
-            BOX_POSE[0] = sample_box_pose()  # used in sim reset
-        elif "sim_insertion" in task_name:
-            BOX_POSE[0] = np.concatenate(sample_insertion_pose())  # used in sim reset
 
-        ts = env.reset()
-
-        ### onscreen render
-        if onscreen_render:
-            ax = plt.subplot()
-            plt_img = ax.imshow(
-                env._physics.render(height=480, width=640, camera_id=onscreen_cam)
-            )
-            plt.ion()
+        descriptions, obs = task.reset()
 
         ### evaluation loop
         if temporal_agg:
@@ -268,27 +291,18 @@ def eval_bc(config, ckpt_name, save_episode=True):
         qpos_list = []
         target_qpos_list = []
         rewards = []
+        print(num_rollouts)
         with torch.inference_mode():
-            for t in range(max_timesteps):
-                ### update onscreen render and wait for DT
-                if onscreen_render:
-                    image = env._physics.render(
-                        height=480, width=640, camera_id=onscreen_cam
-                    )
-                    plt_img.set_data(image)
-                    plt.pause(DT)
+            # TODO Changed the max_timestep
 
-                ### process previous timestep to get qpos and image_list
-                obs = ts.observation
-                if "images" in obs:
-                    image_list.append(obs["images"])
-                else:
-                    image_list.append({"main": obs["image"]})
-                qpos_numpy = np.array(obs["qpos"])
-                qpos = pre_process(qpos_numpy)
-                qpos = torch.from_numpy(qpos).float().cuda().unsqueeze(0)
+            for t in range(max_timesteps):
+                start = time.perf_counter()
+
+                joint_position = pre_process(obs.joint_positions)
+                qpos_numpy = np.array(np.hstack([joint_position, obs.gripper_open]))
+                qpos = torch.from_numpy(qpos_numpy).float().cuda().unsqueeze(0)
                 qpos_history[:, t] = qpos
-                curr_image = get_image(ts, camera_names)
+                curr_image = get_image(obs, camera_names)
 
                 ### query policy
                 if config["policy_class"] == "ACT":
@@ -319,41 +333,30 @@ def eval_bc(config, ckpt_name, save_episode=True):
 
                 ### post-process actions
                 raw_action = raw_action.squeeze(0).cpu().numpy()
-                action = post_process(raw_action)
+
+                action = np.hstack([post_process(raw_action[:7]), raw_action[-1]])
                 target_qpos = action
 
                 ### step the environment
-                ts = env.step(target_qpos)
+                obs, reward, terminate = task.step(target_qpos)
+                print(f"step time: {time.perf_counter()-start}")
 
                 ### for visualization
                 qpos_list.append(qpos_numpy)
                 target_qpos_list.append(target_qpos)
-                rewards.append(ts.reward)
+                rewards.append(reward)
 
-            plt.close()
-        if real_robot:
-            move_grippers(
-                [env.puppet_bot_left, env.puppet_bot_right],
-                [PUPPET_GRIPPER_JOINT_OPEN] * 2,
-                move_time=0.5,
-            )  # open
-            pass
+            # plt.close()
 
         rewards = np.array(rewards)
         episode_return = np.sum(rewards[rewards != None])
         episode_returns.append(episode_return)
         episode_highest_reward = np.max(rewards)
         highest_rewards.append(episode_highest_reward)
+        # TODO Changed the envmax rewar; refer to the original file
         print(
-            f"Rollout {rollout_id}\n{episode_return=}, {episode_highest_reward=}, {env_max_reward=}, Success: {episode_highest_reward==env_max_reward}"
+            f"Rollout {rollout_id}\n{episode_return=}, {episode_highest_reward=}, Success: {episode_highest_reward}"
         )
-
-        if save_episode:
-            save_videos(
-                image_list,
-                DT,
-                video_path=os.path.join(ckpt_dir, f"video{rollout_id}.mp4"),
-            )
 
     success_rate = np.mean(np.array(highest_rewards) == env_max_reward)
     avg_return = np.mean(episode_returns)
