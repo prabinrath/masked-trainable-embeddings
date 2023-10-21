@@ -9,11 +9,10 @@ from copy import deepcopy
 from tqdm import tqdm
 from einops import rearrange
 import IPython
+import datetime
 
 from constants import DT
 from constants import PUPPET_GRIPPER_JOINT_OPEN
-from utils import load_data  # data functions
-from utils import sample_box_pose, sample_insertion_pose  # robot functions
 from utils import compute_dict_mean, set_seed, detach_dict  # helper functions
 from policy import ACTPolicy, CNNMLPPolicy
 from visualize_episodes import save_videos
@@ -146,6 +145,7 @@ def main(args):
     )
 
     # Save configuration
+    config["rlbench_env"] = str(config["rlbench_env"])
     if not os.path.isdir(ckpt_dir):
         os.makedirs(ckpt_dir)
     json_path = os.path.join(ckpt_dir, f"config.json")
@@ -338,7 +338,9 @@ def eval_bc(config, ckpt_name, save_episode=True):
     print(summary_str)
 
     # save success rate to txt
-    result_file_name = "result_" + ckpt_name.split(".")[0] + ".txt"
+    result_file_name = (
+        "result_" + ckpt_name.split(".")[0] + f"_{datetime.datetime.now()}.txt"
+    )
     with open(os.path.join(ckpt_dir, result_file_name), "w") as f:
         f.write(summary_str)
         f.write(repr(episode_returns))
@@ -524,8 +526,8 @@ if __name__ == "__main__":
 
 
 # Command line execution
-# python3  imitate_episodes.py --task_name sim_open_close --ckpt_dir /home/local/ASUAD/opatil3/checkpoints/act_open_close_100 --policy_class ACT --kl_weight 10 --chunk_size 100 --hidden_dim 512 --batch_size 128 --dim_feedforward 3200 --num_epochs 2000  --lr 1e-5 --seed 0
+# python3 imitate_episodes.py --task_name sim_door_close --ckpt_dir /home/local/ASUAD/opatil3/checkpoints/act_door_close_100 --policy_class ACT --kl_weight 10 --chunk_size 100 --hidden_dim 512 --batch_size 128 --dim_feedforward 3200 --num_epochs 2000 --lr 1e-5 --seed 0
 
 
 # Eval
-# python3  imitate_episodes.py --task_name sim_box_close --ckpt_dir /home/local/ASUAD/opatil3/checkpoints/act_box_close_100 --policy_class ACT --kl_weight 10 --chunk_size 100 --hidden_dim 512 --batch_size 128 --dim_feedforward 3200 --num_epochs 2000 --lr 1e-5 --seed 0 --eval --onscreen_render
+# python3 imitate_episodes.py --task_name sim_box_close --ckpt_dir /home/local/ASUAD/opatil3/checkpoints/act_box_close_100 --policy_class ACT --kl_weight 10 --chunk_size 100 --hidden_dim 512 --batch_size 128 --dim_feedforward 3200 --num_epochs 2000 --lr 1e-5 --seed 0 --eval --onscreen_render
