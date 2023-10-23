@@ -2,7 +2,6 @@ import torch
 import numpy as np
 import os, sys
 import json
-import pickle
 import argparse
 import matplotlib.pyplot as plt
 from copy import deepcopy
@@ -11,12 +10,8 @@ from einops import rearrange
 import IPython
 import datetime
 
-from constants import DT
-from constants import PUPPET_GRIPPER_JOINT_OPEN
 from utils import compute_dict_mean, set_seed, detach_dict  # helper functions
 from policy import ACTPolicy, CNNMLPPolicy
-from visualize_episodes import save_videos
-from sim_env import BOX_POSE
 
 sys.path.append("/home/local/ASUAD/opatil3/src/robot-latent-actions")
 
@@ -28,7 +23,6 @@ from rlbench.action_modes.arm_action_modes import JointVelocity, JointPosition
 from rlbench.action_modes.gripper_action_modes import Discrete
 from rlbench.environment import Environment
 from rlbench.observation_config import ObservationConfig
-import time
 
 e = IPython.embed
 
