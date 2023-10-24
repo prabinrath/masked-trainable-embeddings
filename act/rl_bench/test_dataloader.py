@@ -1,5 +1,5 @@
 import argparse
-from rl_bench.torch_data import load_data, ReverseTrajDataset
+from act.rl_bench.torch_data import load_data, ReverseTrajDataset
 import numpy as np
 
 FRANKA_JOINT_LIMITS = np.asarray(
