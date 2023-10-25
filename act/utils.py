@@ -3,10 +3,6 @@ import torch
 import cv2
 import matplotlib.pyplot as plt
 
-import IPython
-
-e = IPython.embed
-
 
 def save_videos(video, dt=0.02, video_path=None):
     """

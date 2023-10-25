@@ -10,12 +10,6 @@ import re
 CONFIG_DIM = 7  # joint space
 
 
-def set_seed(seed):
-    torch.manual_seed(seed)
-    np.random.seed(seed)
-    random.seed(seed)
-
-
 class ConfigMinMaxNormalization(object):
     """MinMax Normalization --> [-1, 1]
     x = (x - min) / (max - min).
@@ -123,7 +117,6 @@ class ReverseTrajDataset(Dataset):
                     data[: end_ts - start_ts] = torch.as_tensor(np.array(chunk_data))
                     data_batch["gripper_action"] = data
                 elif "rgb" in key:
-                    # Normalize images?
                     image_dict[key] = demo[key][start_ts]
                 else:
                     data = demo[key][start_ts]

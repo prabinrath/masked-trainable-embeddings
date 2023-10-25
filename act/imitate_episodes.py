@@ -1,13 +1,12 @@
 import torch
 import numpy as np
-import os, sys
+import os
 import json
 import argparse
 import matplotlib.pyplot as plt
 from copy import deepcopy
 from tqdm import tqdm
 from einops import rearrange
-import IPython
 import datetime
 
 from utils import (
@@ -18,18 +17,17 @@ from utils import (
 )  # helper functions
 from policy import ACTPolicy, CNNMLPPolicy
 
-sys.path.append("/home/local/ASUAD/opatil3/src/robot-latent-actions")
+import sys
+sys.path.append('act/act/')
 
-from act.rl_bench.torch_data import ReverseTrajDataset
-from act.rl_bench.torch_data import load_data as load_rlbench_data
+from rl_bench.torch_data import ReverseTrajDataset
+from rl_bench.torch_data import load_data as load_rlbench_data
 
 from rlbench.action_modes.action_mode import MoveArmThenGripper
 from rlbench.action_modes.arm_action_modes import JointVelocity, JointPosition
 from rlbench.action_modes.gripper_action_modes import Discrete
 from rlbench.environment import Environment
 from rlbench.observation_config import ObservationConfig
-
-e = IPython.embed
 
 FRANKA_JOINT_LIMITS = np.asarray(
     [
@@ -365,7 +363,7 @@ def eval_bc(config, ckpt_name, save_episode=True):
             f.write("\n\n")
             f.write(repr(highest_rewards))
 
-        task_performances[rlenv.__name__]: [success_rate, avg_return]
+        task_performances[rlenv.__name__] = [success_rate, avg_return]
     env.shutdown()
     return task_performances
 
