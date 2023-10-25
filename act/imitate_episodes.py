@@ -10,7 +10,12 @@ from einops import rearrange
 import IPython
 import datetime
 
-from utils import compute_dict_mean, set_seed, detach_dict  # helper functions
+from utils import (
+    compute_dict_mean,
+    set_seed,
+    detach_dict,
+    save_videos,
+)  # helper functions
 from policy import ACTPolicy, CNNMLPPolicy
 
 sys.path.append("/home/local/ASUAD/opatil3/src/robot-latent-actions")
@@ -112,10 +117,11 @@ def main(args):
         ckpt_names = [f"policy_best.ckpt"]
         results = []
         for ckpt_name in ckpt_names:
-            success_rate, avg_return = eval_bc(config, ckpt_name, save_episode=True)
-            results.append([ckpt_name, success_rate, avg_return])
+            task_perfs = eval_bc(config, ckpt_name, save_episode=True)
+            for key in task_perfs.keys():
+                results.append([key, task_perfs[key]])
 
-        for ckpt_name, success_rate, avg_return in results:
+        for ckpt_name, [success_rate, avg_return] in results:
             print(f"{ckpt_name}: {success_rate=} {avg_return=}")
         print()
         exit()
@@ -177,31 +183,30 @@ def make_optimizer(policy_class, policy):
 
 def get_image(obs, camera_names):
     curr_images = []
+    viz_out = {}
     for cam_name in camera_names:
-        curr_image = rearrange(getattr(obs, cam_name), "h w c -> c h w")
-
+        curr_image = getattr(obs, cam_name)
+        viz_out[cam_name] = curr_image
+        curr_image = rearrange(curr_image, "h w c -> c h w")
         curr_images.append(curr_image)
     curr_image = np.stack(curr_images, axis=0)
     curr_image = torch.from_numpy(curr_image / 255.0).float().cuda().unsqueeze(0)
-    return curr_image
+    return curr_image, viz_out
 
 
 def eval_bc(config, ckpt_name, save_episode=True):
     set_seed(1000)
     ckpt_dir = config["ckpt_dir"]
     state_dim = config["state_dim"]
-    real_robot = config["real_robot"]
     policy_class = config["policy_class"]
     onscreen_render = config["onscreen_render"]
     policy_config = config["policy_config"]
     camera_names = config["camera_names"]
     max_timesteps = config["episode_len"]
     temporal_agg = config["temporal_agg"]
-    onscreen_cam = "angle"
     rlbench_env = config["rlbench_env"]
 
     # load policy and stats
-
     ckpt_path = os.path.join(ckpt_dir, ckpt_name)
     policy = make_policy(policy_class, policy_config)
     loading_status = policy.load_state_dict(torch.load(ckpt_path))
@@ -220,6 +225,15 @@ def eval_bc(config, ckpt_name, save_episode=True):
         lambda s_pos: 1.0 * ((s_pos + 1) / 2) * (max_bound - min_bound) + min_bound
     )
 
+    # Training config
+    query_frequency = policy_config["num_queries"]
+    if temporal_agg:
+        query_frequency = 1
+        num_queries = policy_config["num_queries"]
+
+    max_timesteps = int(max_timesteps * 1)  # may increase for real-world tasks
+    num_rollouts = 50
+
     # load simulation environment
     obs_config = ObservationConfig()
     obs_config.set_all(True)
@@ -233,115 +247,125 @@ def eval_bc(config, ckpt_name, save_episode=True):
         headless=not onscreen_render,
     )
     env.launch()
-    task = env.get_task(rlbench_env)
-    env_max_reward = 1  # Hardcoded as we don't do reward shaping
-    query_frequency = policy_config["num_queries"]
-    if temporal_agg:
-        query_frequency = 1
-        num_queries = policy_config["num_queries"]
 
-    max_timesteps = int(max_timesteps * 1)  # may increase for real-world tasks
+    # Iterate over tasks
+    task_performances = {}
+    for rlenv in rlbench_env:
+        task = env.get_task(rlenv)
+        task_dir = os.path.join(
+            ckpt_dir, rlenv.__name__, f"{datetime.datetime.now()}"
+        )  # Store task specific information here
+        if not os.path.isdir(task_dir):
+            os.makedirs(task_dir)
+        env_max_reward = 1  # Hardcoded as we don't do reward shaping
+        episode_returns = []
+        highest_rewards = []
 
-    num_rollouts = 50
-    episode_returns = []
-    highest_rewards = []
-    for rollout_id in range(num_rollouts):
-        rollout_id += 0
+        for rollout_id in range(num_rollouts):
+            rollout_id += 0
+            _, obs = task.reset()
+            if temporal_agg:
+                all_time_actions = torch.zeros(
+                    [max_timesteps, max_timesteps + num_queries, state_dim]
+                ).cuda()
+            qpos_history = torch.zeros((1, max_timesteps, state_dim)).cuda()
+            image_list = []  # for visualization
+            qpos_list = []
+            target_qpos_list = []
+            rewards = []
 
-        _, obs = task.reset()
+            with torch.inference_mode():
+                for t in range(max_timesteps):
+                    joint_position = pre_process(obs.joint_positions)
+                    qpos_numpy = np.array(np.hstack([joint_position, obs.gripper_open]))
+                    qpos = torch.from_numpy(qpos_numpy).float().cuda().unsqueeze(0)
+                    qpos_history[:, t] = qpos
+                    curr_image, viz_out = get_image(obs, camera_names)
+                    image_list.append(viz_out)  # For generating videos
 
-        ### evaluation loop
-        if temporal_agg:
-            all_time_actions = torch.zeros(
-                [max_timesteps, max_timesteps + num_queries, state_dim]
-            ).cuda()
-
-        qpos_history = torch.zeros((1, max_timesteps, state_dim)).cuda()
-        image_list = []  # for visualization
-        qpos_list = []
-        target_qpos_list = []
-        rewards = []
-        with torch.inference_mode():
-            for t in range(max_timesteps):
-                joint_position = pre_process(obs.joint_positions)
-                qpos_numpy = np.array(np.hstack([joint_position, obs.gripper_open]))
-                qpos = torch.from_numpy(qpos_numpy).float().cuda().unsqueeze(0)
-                qpos_history[:, t] = qpos
-                curr_image = get_image(obs, camera_names)
-
-                ### query policy
-                if config["policy_class"] == "ACT":
-                    if t % query_frequency == 0:
-                        all_actions = policy(qpos, curr_image)
-                    if temporal_agg:
-                        all_time_actions[[t], t : t + num_queries] = all_actions
-                        actions_for_curr_step = all_time_actions[:, t]
-                        actions_populated = torch.all(
-                            actions_for_curr_step != 0, axis=1
-                        )
-                        actions_for_curr_step = actions_for_curr_step[actions_populated]
-                        k = 0.01
-                        exp_weights = np.exp(-k * np.arange(len(actions_for_curr_step)))
-                        exp_weights = exp_weights / exp_weights.sum()
-                        exp_weights = (
-                            torch.from_numpy(exp_weights).cuda().unsqueeze(dim=1)
-                        )
-                        raw_action = (actions_for_curr_step * exp_weights).sum(
-                            dim=0, keepdim=True
-                        )
+                    ### query policy
+                    if config["policy_class"] == "ACT":
+                        if t % query_frequency == 0:
+                            all_actions = policy(qpos, curr_image)
+                        if temporal_agg:
+                            all_time_actions[[t], t : t + num_queries] = all_actions
+                            actions_for_curr_step = all_time_actions[:, t]
+                            actions_populated = torch.all(
+                                actions_for_curr_step != 0, axis=1
+                            )
+                            actions_for_curr_step = actions_for_curr_step[
+                                actions_populated
+                            ]
+                            k = 0.01
+                            exp_weights = np.exp(
+                                -k * np.arange(len(actions_for_curr_step))
+                            )
+                            exp_weights = exp_weights / exp_weights.sum()
+                            exp_weights = (
+                                torch.from_numpy(exp_weights).cuda().unsqueeze(dim=1)
+                            )
+                            raw_action = (actions_for_curr_step * exp_weights).sum(
+                                dim=0, keepdim=True
+                            )
+                        else:
+                            raw_action = all_actions[:, t % query_frequency]
+                    elif config["policy_class"] == "CNNMLP":
+                        raw_action = policy(qpos, curr_image)
                     else:
-                        raw_action = all_actions[:, t % query_frequency]
-                elif config["policy_class"] == "CNNMLP":
-                    raw_action = policy(qpos, curr_image)
-                else:
-                    raise NotImplementedError
+                        raise NotImplementedError
 
-                ### post-process actions
-                raw_action = raw_action.squeeze(0).cpu().numpy()
+                    ### post-process actions
+                    raw_action = raw_action.squeeze(0).cpu().numpy()
+                    action = np.hstack([post_process(raw_action[:7]), raw_action[-1]])
+                    target_qpos = action
 
-                action = np.hstack([post_process(raw_action[:7]), raw_action[-1]])
-                target_qpos = action
+                    ### step the environment
+                    obs, reward, terminate = task.step(target_qpos)
 
-                ### step the environment
-                obs, reward, terminate = task.step(target_qpos)
+                    ### for visualization
+                    qpos_list.append(qpos_numpy)
+                    target_qpos_list.append(target_qpos)
+                    rewards.append(reward)
 
-                ### for visualization
-                qpos_list.append(qpos_numpy)
-                target_qpos_list.append(target_qpos)
-                rewards.append(reward)
+            rewards = np.array(rewards)
+            episode_return = np.sum(rewards[rewards != None])
+            episode_returns.append(episode_return)
+            episode_highest_reward = np.max(rewards)
+            highest_rewards.append(episode_highest_reward)
+            print(
+                f"Rollout for {rlenv}: {rollout_id}\n{episode_return=}, {episode_highest_reward=}, {env_max_reward=}, Success: {episode_highest_reward==env_max_reward}"
+            )
+            if save_episode:
+                save_videos(
+                    image_list,
+                    video_path=os.path.join(
+                        task_dir,
+                        f"video{rollout_id}_{episode_highest_reward==env_max_reward}.mp4",
+                    ),
+                )
 
-            # plt.close()
+        success_rate = np.mean(np.array(highest_rewards) == env_max_reward)
+        avg_return = np.mean(episode_returns)
+        summary_str = f"Task: {rlenv}\nSuccess rate: {success_rate}\nAverage return: {avg_return}\n\n"
+        for r in range(env_max_reward + 1):
+            more_or_equal_r = (np.array(highest_rewards) >= r).sum()
+            more_or_equal_r_rate = more_or_equal_r / num_rollouts
+            summary_str += f"Reward >= {r}: {more_or_equal_r}/{num_rollouts} = {more_or_equal_r_rate*100}%\n"
 
-        rewards = np.array(rewards)
-        episode_return = np.sum(rewards[rewards != None])
-        episode_returns.append(episode_return)
-        episode_highest_reward = np.max(rewards)
-        highest_rewards.append(episode_highest_reward)
-        print(
-            f"Rollout {rollout_id}\n{episode_return=}, {episode_highest_reward=}, {env_max_reward=}, Success: {episode_highest_reward==env_max_reward}"
-        )
+        print(summary_str)
 
-    success_rate = np.mean(np.array(highest_rewards) == env_max_reward)
-    avg_return = np.mean(episode_returns)
-    summary_str = f"\nSuccess rate: {success_rate}\nAverage return: {avg_return}\n\n"
-    for r in range(env_max_reward + 1):
-        more_or_equal_r = (np.array(highest_rewards) >= r).sum()
-        more_or_equal_r_rate = more_or_equal_r / num_rollouts
-        summary_str += f"Reward >= {r}: {more_or_equal_r}/{num_rollouts} = {more_or_equal_r_rate*100}%\n"
+        # save success rate to txt
+        result_file_name = "result_" + ckpt_name.split(".")[0] + f".txt"
+        with open(os.path.join(task_dir, result_file_name), "w") as f:
+            f.write(str(config))
+            f.write(summary_str)
+            f.write(repr(episode_returns))
+            f.write("\n\n")
+            f.write(repr(highest_rewards))
 
-    print(summary_str)
-
-    # save success rate to txt
-    result_file_name = (
-        "result_" + ckpt_name.split(".")[0] + f"_{datetime.datetime.now()}.txt"
-    )
-    with open(os.path.join(ckpt_dir, result_file_name), "w") as f:
-        f.write(summary_str)
-        f.write(repr(episode_returns))
-        f.write("\n\n")
-        f.write(repr(highest_rewards))
-
-    return success_rate, avg_return
+        task_performances[rlenv.__name__]: [success_rate, avg_return]
+    env.shutdown()
+    return task_performances
 
 
 def forward_pass(data, policy):
