@@ -51,6 +51,7 @@ def main(args):
     batch_size_train = args["batch_size"]
     batch_size_val = args["batch_size"]
     num_epochs = args["num_epochs"]
+    is_latent = args["latent_control"]
 
     # get task parameters
     is_sim = task_name[:4] == "sim_"
@@ -84,6 +85,7 @@ def main(args):
             "nheads": nheads,
             "camera_names": camera_names,
             "state_dim": state_dim,
+            "is_latent": is_latent,
         }
     elif policy_class == "CNNMLP":
         policy_config = {
@@ -112,7 +114,7 @@ def main(args):
         "real_robot": not is_sim,
         "rlbench_env": rlbench_env,
     }
-
+    # TODO add the is_latent parameter
     if is_eval:
         ckpt_names = [f"policy_best.ckpt"]
         results = []
@@ -539,6 +541,7 @@ if __name__ == "__main__":
         required=False,
     )
     parser.add_argument("--temporal_agg", action="store_true")
+    parser.add_argument("--latent_control", action="store_true")
 
     main(vars(parser.parse_args()))
 

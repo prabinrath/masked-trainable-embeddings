@@ -30,7 +30,7 @@ demo = task.get_demos(1, live_demos=True)
 for e in range(num_episodes):
     print("Reset Episode")
     descriptions, obs = task.reset()
-    breakpoint()
+    # breakpoint()
     for i in range(steps_per_task):
         action = np.random.random(env.action_shape)
         start = time.perf_counter()

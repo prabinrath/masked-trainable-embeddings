@@ -41,7 +41,14 @@ class DETRVAE(nn.Module):
     """This is the DETR module that performs object detection"""
 
     def __init__(
-        self, backbones, transformer, encoder, state_dim, num_queries, camera_names
+        self,
+        backbones,
+        transformer,
+        encoder,
+        state_dim,
+        num_queries,
+        camera_names,
+        is_latent,
     ):
         """Initializes the model.
         Parameters:
@@ -51,6 +58,7 @@ class DETRVAE(nn.Module):
             num_queries: number of object queries, ie detection slot. This is the maximal number of objects
                          DETR can detect in a single image. For COCO, we recommend 100 queries.
             aux_loss: True if auxiliary decoding losses (loss at each decoder layer) are to be used.
+            is_latent: To add sin and cosine positional embeddings in latent space for conditioned Transformers.
         """
         super().__init__()
         self.num_queries = num_queries
@@ -61,6 +69,8 @@ class DETRVAE(nn.Module):
         self.action_head = nn.Linear(hidden_dim, state_dim)
         self.is_pad_head = nn.Linear(hidden_dim, 1)
         self.query_embed = nn.Embedding(num_queries, hidden_dim)
+        self.is_latent = is_latent
+
         if backbones is not None:
             self.input_proj = nn.Conv2d(
                 backbones[0].num_channels, hidden_dim, kernel_size=1
@@ -139,7 +149,9 @@ class DETRVAE(nn.Module):
             mu = latent_info[:, : self.latent_dim]
             logvar = latent_info[:, self.latent_dim :]
             latent_sample = reparametrize(mu, logvar)
+            # get_sinusoid_encoding_table(1 + 1 + num_queries, hidden_dim)
             latent_input = self.latent_out_proj(latent_sample)
+
         else:
             mu = logvar = None
             latent_sample = torch.zeros([bs, self.latent_dim], dtype=torch.float32).to(
@@ -288,6 +300,7 @@ def build(args):
     transformer = build_transformer(args)
 
     encoder = build_encoder(args)
+    # breakpoint()
 
     model = DETRVAE(
         backbones,
@@ -296,6 +309,7 @@ def build(args):
         state_dim=state_dim,
         num_queries=args.num_queries,
         camera_names=args.camera_names,
+        is_latent=args.is_latent,
     )
 
     n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
