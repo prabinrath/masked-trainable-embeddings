@@ -1,4 +1,7 @@
-import argparse
+import argparse, sys
+
+sys.path.append("/home/local/ASUAD/opatil3/src/robot-latent-actions")
+
 from act.rl_bench.torch_data import load_data, ReverseTrajDataset
 import numpy as np
 
@@ -23,7 +26,7 @@ def main():
     train_loader, val_dataset = load_data(
         dataset_dir="/home/local/ASUAD/opatil3/datasets/sim_open_close",
         required_data_keys=required_data_keys,
-        task_filter_key=ReverseTrajDataset.task_filter_map["door_close"],
+        task_filter_key=ReverseTrajDataset.task_filter_map["box"],
         chunk_size=100,
         norm_bound=FRANKA_JOINT_LIMITS,
     )
