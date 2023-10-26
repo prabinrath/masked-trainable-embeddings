@@ -40,9 +40,9 @@ FRANKA_JOINT_LIMITS = np.asarray(
 
 def main(args):
     set_seed(1)
+    description = 'sin_latent_encoding'
     # command line parameters
     is_eval = args["eval"]
-    ckpt_dir = args["ckpt_dir"]
     policy_class = args["policy_class"]
     onscreen_render = args["onscreen_render"]
     task_name = args["task_name"]
@@ -50,6 +50,7 @@ def main(args):
     batch_size_val = args["batch_size"]
     num_epochs = args["num_epochs"]
     is_latent = args["latent_control"]
+    ckpt_dir = f'{args["ckpt_dir"]}{task_name}_{description}'
 
     # get task parameters
     is_sim = task_name[:4] == "sim_"
@@ -373,6 +374,7 @@ def forward_pass(data, policy):
     joint_action = data["joint_action"]
     is_pad = data["is_pad"]
     gripper_action = data["gripper_action"]
+    latent_control = data["latent_control"]
 
     # Append gripper action to joint action
     action = torch.concatenate((joint_action, gripper_action.unsqueeze(-1)), 2)
@@ -380,13 +382,14 @@ def forward_pass(data, policy):
     # Get the current joint state
     qpos = action[:, 0, :]
 
-    images, qpos, action, is_pad = (
+    images, qpos, action, is_pad, latent_control = (
         images.cuda(),
         qpos.cuda(),
         action.cuda(),
         is_pad.cuda(),
+        latent_control.cuda(),
     )
-    return policy(qpos, images, action, is_pad)  # TODO remove None
+    return policy(qpos, images, latent_control, action, is_pad)  # TODO remove None
 
 
 def train_bc(train_dataloader, val_dataloader, config):

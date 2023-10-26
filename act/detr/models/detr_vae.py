@@ -32,6 +32,51 @@ def get_sinusoid_encoding_table(n_position, d_hid):
 
     return torch.FloatTensor(sinusoid_table).unsqueeze(0)
 
+# def get_sine_positional_encoding(max_len, d_model):
+#     position = np.arange(max_len)[:, np.newaxis]
+#     div_term = np.exp(np.arange(0, d_model) * -(np.log(10000.0) / d_model))
+#     pos_enc = np.sin(position * div_term)
+#     return pos_enc
+
+# def get_cos_positional_encoding(max_len, d_model):
+#     position = np.arange(max_len)[:, np.newaxis]
+#     div_term = np.exp(np.arange(0, d_model) * -(np.log(10000.0) / d_model))
+#     pos_enc = np.cos(position * div_term)
+#     return pos_enc
+
+
+def getPositionEncoding(seq_len, d, latent, n=10000):
+    P = np.zeros((seq_len, d))
+    for k in range(seq_len):
+        for i in np.arange(int(d/2)):
+            denominator = np.power(n, 2*i/d)
+            if latent ==0:
+                P[k, 2*i] = np.sin(k/denominator)
+                P[k, 2*i+1] = np.sin(k/denominator)
+            else:
+                P[k, 2*i] = np.cos(k/denominator)
+                P[k, 2*i+1] = np.cos(k/denominator)
+    return P
+
+def getEmbeddedLatent(pos_latent,latent_sample,latent_control):
+    """
+        0 for backward
+        1 for forwad
+    """
+    pos_forward=getPositionEncoding(latent_sample.shape[1],latent_sample.shape[1],latent=1)
+    pos_backward=getPositionEncoding(latent_sample.shape[1],latent_sample.shape[1],latent=0)
+    for i in range(len(latent_control)):
+        
+        if latent_control[i] == 0:
+            latent_embedding = pos_backward
+        else:
+            latent_embedding = pos_forward
+
+        pos_latent[i] = np.sum(latent_embedding,axis=1)/32
+    pos_latent=torch.tensor(pos_latent,device=latent_sample.device,dtype=latent_sample.dtype)
+
+    return pos_latent
+
 
 class DETRVAE(nn.Module):
     """This is the DETR module that performs object detection"""
@@ -104,7 +149,7 @@ class DETRVAE(nn.Module):
             2, hidden_dim
         )  # learned position embedding for proprio and latent
 
-    def forward(self, qpos, image, env_state, actions=None, is_pad=None):
+    def forward(self, qpos, image, latent_control, env_state, actions=None, is_pad=None):
         """
         qpos: batch, qpos_dim
         image: batch, num_cam, channel, height, width
@@ -145,7 +190,12 @@ class DETRVAE(nn.Module):
             mu = latent_info[:, : self.latent_dim]
             logvar = latent_info[:, self.latent_dim :]
             latent_sample = reparametrize(mu, logvar)
-            # get_sinusoid_encoding_table(1 + 1 + num_queries, hidden_dim)
+            
+            #TODO Latent position embedding
+            pos_latent=np.zeros((len(latent_control),32))
+            pos_latent=getEmbeddedLatent(pos_latent, latent_sample, latent_control)
+            latent_sample=latent_sample+pos_latent
+
             latent_input = self.latent_out_proj(latent_sample)
 
         else:
