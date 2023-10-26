@@ -32,30 +32,28 @@ def get_sinusoid_encoding_table(n_position, d_hid):
 
     return torch.FloatTensor(sinusoid_table).unsqueeze(0)
 
-# def get_sine_positional_encoding(max_len, d_model):
-#     position = np.arange(max_len)[:, np.newaxis]
-#     div_term = np.exp(np.arange(0, d_model) * -(np.log(10000.0) / d_model))
-#     pos_enc = np.sin(position * div_term)
-#     return pos_enc
-
-# def get_cos_positional_encoding(max_len, d_model):
-#     position = np.arange(max_len)[:, np.newaxis]
-#     div_term = np.exp(np.arange(0, d_model) * -(np.log(10000.0) / d_model))
-#     pos_enc = np.cos(position * div_term)
-#     return pos_enc
-
 
 def getPositionEncoding(seq_len, d, latent, n=10000):
+    """ 
+    To see if implementing a normal positional embedding with the backwards 
+    as the reverse function of the forward embedding would be better or not.
+    Example reverse of sin(x) = -sin(x) and reverse of cos(x) = cos(-x).
+    So, would it be better if we try inputting the reverse function in the 
+    normal position embeddings.
+    """
+    # Implementation taken from https://machinelearningmastery.com/a-gentle-introduction-to-positional-encoding-in-transformer-models-part-1/
     P = np.zeros((seq_len, d))
     for k in range(seq_len):
         for i in np.arange(int(d/2)):
             denominator = np.power(n, 2*i/d)
+            # based on the latent we either get a sin or cos latent
             if latent ==0:
                 P[k, 2*i] = np.sin(k/denominator)
                 P[k, 2*i+1] = np.sin(k/denominator)
             else:
                 P[k, 2*i] = np.cos(k/denominator)
                 P[k, 2*i+1] = np.cos(k/denominator)
+        
     return P
 
 def getEmbeddedLatent(pos_latent,latent_sample,latent_control):
@@ -63,16 +61,19 @@ def getEmbeddedLatent(pos_latent,latent_sample,latent_control):
         0 for backward
         1 for forwad
     """
+    # Calculate both the forward and the backward embeddings
     pos_forward=getPositionEncoding(latent_sample.shape[1],latent_sample.shape[1],latent=1)
     pos_backward=getPositionEncoding(latent_sample.shape[1],latent_sample.shape[1],latent=0)
+    
     for i in range(len(latent_control)):
-        
+    # find the latent embedding based on the current latent control variable
         if latent_control[i] == 0:
             latent_embedding = pos_backward
         else:
             latent_embedding = pos_forward
-
+        # Converting a 32,32 to a 32,1 array
         pos_latent[i] = np.sum(latent_embedding,axis=1)/32
+    # Converting a numpy array to the same tensor array as pos_latent
     pos_latent=torch.tensor(pos_latent,device=latent_sample.device,dtype=latent_sample.dtype)
 
     return pos_latent
@@ -193,7 +194,9 @@ class DETRVAE(nn.Module):
             
             #TODO Latent position embedding
             pos_latent=np.zeros((len(latent_control),32))
+            # Calling for latent Embedding here 
             pos_latent=getEmbeddedLatent(pos_latent, latent_sample, latent_control)
+            # Adding the embedding to the latent space
             latent_sample=latent_sample+pos_latent
 
             latent_input = self.latent_out_proj(latent_sample)
