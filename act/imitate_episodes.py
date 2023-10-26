@@ -48,8 +48,7 @@ def main(args):
     policy_class = args["policy_class"]
     onscreen_render = args["onscreen_render"]
     task_name = args["task_name"]
-    batch_size_train = args["batch_size"]
-    batch_size_val = args["batch_size"]
+    batch_size= args["batch_size"]
     num_epochs = args["num_epochs"]
     is_latent = args["latent_control"]
 
@@ -144,6 +143,7 @@ def main(args):
         ],
         chunk_size=args["chunk_size"],
         norm_bound=FRANKA_JOINT_LIMITS,
+        batch_size=batch_size
     )
 
     # Save configuration

@@ -6,6 +6,7 @@ import glob
 import os
 import random
 import re
+from functools import partial
 
 CONFIG_DIM = 7  # joint space
 
@@ -74,6 +75,7 @@ class ReverseTrajDataset(Dataset):
         required_data_keys,
         chunk_size=100,
         norm_bound=None,
+        sampler=partial(np.random.uniform, 0, 1),  # partial function
     ):
         self.file_list = file_list
         self.required_data_keys = required_data_keys
@@ -83,6 +85,7 @@ class ReverseTrajDataset(Dataset):
         else:
             self.normalizer = None
         self.len = len(self.file_list)
+        self.sampler = sampler
 
     def __len__(self):
         return self.len
@@ -99,7 +102,9 @@ class ReverseTrajDataset(Dataset):
             assert all([req_key in valid_keys for req_key in self.required_data_keys])
 
             episode_len = len(demo[valid_keys[0]])
-            start_ts = np.random.choice(episode_len)
+            # start_ts = np.random.choice(episode_len)
+            # Sample start_ts from a distribution
+            start_ts = int(self.sampler() * episode_len)
             end_ts = min(episode_len, start_ts + self.chunk_size)
 
             image_dict = {}
@@ -226,11 +231,13 @@ def load_data(
     random.shuffle(file_list)
 
     split_idx = int(len(file_list) * train_split)
+    # print("Sampling train dataset from a beta distribution: 1.5, 1.5")
     train_dataset = ReverseTrajDataset(
         file_list=file_list[:split_idx],
         required_data_keys=required_data_keys,
         chunk_size=chunk_size,
         norm_bound=norm_bound,
+        # sampler=partial(np.random.beta, 1.5, 1.5),
     )
     val_dataset = ReverseTrajDataset(
         file_list=file_list[split_idx:],
