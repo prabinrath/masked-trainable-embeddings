@@ -57,7 +57,7 @@ SIM_TASK_CONFIGS = {
         "rlbench_env": [OpenBox, CloseBox],
         "dataset_dir": DATA_DIR + "/sim_open_close",
         "num_episodes": 200,
-        "episode_len": 250,
+        "episode_len": 500,
         "camera_names": [
             "front_rgb",
             "left_shoulder_rgb",
@@ -70,7 +70,7 @@ SIM_TASK_CONFIGS = {
         "rlbench_env": [OpenDoor, CloseDoor],
         "dataset_dir": DATA_DIR + "/sim_open_close",
         "num_episodes": 200,
-        "episode_len": 250,
+        "episode_len": 500,
         "camera_names": [
             "front_rgb",
             "left_shoulder_rgb",
