@@ -3,8 +3,6 @@ from torch.nn import functional as F
 import torchvision.transforms as transforms
 
 from detr.main import build_ACT_model_and_optimizer, build_CNNMLP_model_and_optimizer
-import IPython
-e = IPython.embed
 
 class ACTPolicy(nn.Module):
     def __init__(self, args_override):
@@ -15,7 +13,7 @@ class ACTPolicy(nn.Module):
         self.kl_weight = args_override['kl_weight']
         print(f'KL Weight {self.kl_weight}')
 
-    def __call__(self, qpos, image, actions=None, is_pad=None):
+    def __call__(self, qpos, image, latent_control, actions=None, is_pad=None):
         env_state = None
         # Mean and std from Imagenet => Should we change this?
         normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
@@ -25,7 +23,8 @@ class ACTPolicy(nn.Module):
             actions = actions[:, :self.model.num_queries]
             is_pad = is_pad[:, :self.model.num_queries]
 
-            a_hat, is_pad_hat, (mu, logvar) = self.model(qpos, image, env_state, actions, is_pad)
+
+            a_hat, is_pad_hat, (mu, logvar) = self.model(qpos, image, latent_control, env_state, actions, is_pad)
             total_kld, dim_wise_kld, mean_kld = kl_divergence(mu, logvar)
             loss_dict = dict()
             all_l1 = F.l1_loss(actions, a_hat, reduction='none')

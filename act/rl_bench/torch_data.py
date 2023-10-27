@@ -11,12 +11,6 @@ from functools import partial
 CONFIG_DIM = 7  # joint space
 
 
-def set_seed(seed):
-    torch.manual_seed(seed)
-    np.random.seed(seed)
-    random.seed(seed)
-
-
 class ConfigMinMaxNormalization(object):
     """MinMax Normalization --> [-1, 1]
     x = (x - min) / (max - min).
@@ -128,19 +122,11 @@ class ReverseTrajDataset(Dataset):
                     data[: end_ts - start_ts] = torch.as_tensor(np.array(chunk_data))
                     data_batch["gripper_action"] = data
                 elif "rgb" in key:
-                    # Normalize images?
                     image_dict[key] = demo[key][start_ts]
                 else:
                     data = demo[key][start_ts]
                     data = torch.as_tensor(data)
                     data_batch[key] = data
-
-            # traj_type = self.file_list[index].split("_")[-2]
-            # if traj_type == "forward":
-            #     latent = np.array([start_ts / episode_len, 1.0, 0.0], dtype=np.float32)
-            # elif traj_type == "backward":
-            #     latent = np.array([start_ts / episode_len, 0.0, 1.0], dtype=np.float32)
-            # data_batch.append(torch.as_tensor(latent))
 
             all_cam_images = []
             for cam_name in ReverseTrajDataset.camera_names:
@@ -155,11 +141,16 @@ class ReverseTrajDataset(Dataset):
             is_pad = np.ones((self.chunk_size))
             is_pad[: end_ts - start_ts] = 0
             data_batch["is_pad"] = torch.from_numpy(is_pad).bool()
+            if "demo_backward" in self.file_list[index]:
+                data_batch["latent_control"] = 0
+            elif "demo_forward" in self.file_list[index]:
+                data_batch["latent_control"] = 1
 
         assert data_batch["images"].shape == torch.Size([4, 3, 128, 128])
         assert data_batch["is_pad"].shape == torch.Size([self.chunk_size])
         assert data_batch["joint_action"].shape == torch.Size([self.chunk_size, 7])
         assert data_batch["gripper_action"].shape == torch.Size([self.chunk_size])
+        assert "latent_control" in data_batch
 
         return data_batch
 

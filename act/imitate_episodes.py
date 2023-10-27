@@ -1,13 +1,12 @@
 import torch
 import numpy as np
-import os, sys
+import os
 import json
 import argparse
 import matplotlib.pyplot as plt
 from copy import deepcopy
 from tqdm import tqdm
 from einops import rearrange
-import IPython
 import datetime
 
 from utils import (
@@ -18,18 +17,17 @@ from utils import (
 )  # helper functions
 from policy import ACTPolicy, CNNMLPPolicy
 
-sys.path.append("/home/local/ASUAD/opatil3/src/robot-latent-actions")
+import sys
+sys.path.append('act/act/')
 
-from act.rl_bench.torch_data import ReverseTrajDataset
-from act.rl_bench.torch_data import load_data as load_rlbench_data
+from rl_bench.torch_data import ReverseTrajDataset
+from rl_bench.torch_data import load_data as load_rlbench_data
 
 from rlbench.action_modes.action_mode import MoveArmThenGripper
 from rlbench.action_modes.arm_action_modes import JointVelocity, JointPosition
 from rlbench.action_modes.gripper_action_modes import Discrete
 from rlbench.environment import Environment
 from rlbench.observation_config import ObservationConfig
-
-e = IPython.embed
 
 FRANKA_JOINT_LIMITS = np.asarray(
     [
@@ -42,15 +40,16 @@ FRANKA_JOINT_LIMITS = np.asarray(
 
 def main(args):
     set_seed(1)
+    description = 'sin_latent_encoding'
     # command line parameters
     is_eval = args["eval"]
-    ckpt_dir = args["ckpt_dir"]
     policy_class = args["policy_class"]
     onscreen_render = args["onscreen_render"]
     task_name = args["task_name"]
     batch_size= args["batch_size"]
     num_epochs = args["num_epochs"]
     is_latent = args["latent_control"]
+    ckpt_dir = f'{args["ckpt_dir"]}{task_name}_{description}'
 
     # get task parameters
     is_sim = task_name[:4] == "sim_"
@@ -365,7 +364,7 @@ def eval_bc(config, ckpt_name, save_episode=True):
             f.write("\n\n")
             f.write(repr(highest_rewards))
 
-        task_performances[rlenv.__name__]: [success_rate, avg_return]
+        task_performances[rlenv.__name__] = [success_rate, avg_return]
     env.shutdown()
     return task_performances
 
@@ -375,6 +374,7 @@ def forward_pass(data, policy):
     joint_action = data["joint_action"]
     is_pad = data["is_pad"]
     gripper_action = data["gripper_action"]
+    latent_control = data["latent_control"]
 
     # Append gripper action to joint action
     action = torch.concatenate((joint_action, gripper_action.unsqueeze(-1)), 2)
@@ -382,13 +382,14 @@ def forward_pass(data, policy):
     # Get the current joint state
     qpos = action[:, 0, :]
 
-    images, qpos, action, is_pad = (
+    images, qpos, action, is_pad, latent_control = (
         images.cuda(),
         qpos.cuda(),
         action.cuda(),
         is_pad.cuda(),
+        latent_control.cuda(),
     )
-    return policy(qpos, images, action, is_pad)  # TODO remove None
+    return policy(qpos, images, latent_control, action, is_pad)  # TODO remove None
 
 
 def train_bc(train_dataloader, val_dataloader, config):

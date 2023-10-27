@@ -26,7 +26,6 @@
         pip install einops
         pip install packaging
         pip install h5py
-        pip install ipython
         cd act/detr && pip install -e .
 
     - Install RLBench in the same env
