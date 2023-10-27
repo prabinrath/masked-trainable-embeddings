@@ -302,7 +302,7 @@ def eval_bc(config, ckpt_name, save_episode=True, **kwargs):
                     if config["policy_class"] == "ACT":
                         if t % query_frequency == 0:
                             all_actions = policy(
-                                qpos, curr_image, latent_control=t_latent_control
+                                qpos, curr_image, latent_control=[t_latent_control]
                             )
                         if temporal_agg:
                             all_time_actions[[t], t : t + num_queries] = all_actions
