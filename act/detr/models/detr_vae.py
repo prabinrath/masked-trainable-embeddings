@@ -157,20 +157,26 @@ class DETRVAE(nn.Module):
             mu = latent_info[:, : self.latent_dim]
             logvar = latent_info[:, self.latent_dim :]
             latent_sample = reparametrize(mu, logvar)
-
-            latent_sample = add_pos_latent(
-                latent_sample=latent_sample, latent_control=latent_control
-            )
+            # Add position embedding to the latent vector for differentiating between forward/backward
+            # latent_sample = add_pos_latent(
+            #     latent_sample=latent_sample, latent_control=latent_control
+            # )
             latent_input = self.latent_out_proj(latent_sample)
 
         else:
             mu = logvar = None
+            # Sample from a Gaussian
+            # latent_sample = torch.normal(
+            #     0, 1, [bs, self.latent_dim], dtype=torch.float32
+            # ).to(qpos.device)
             latent_sample = torch.zeros([bs, self.latent_dim], dtype=torch.float32).to(
                 qpos.device
             )
-            latent_sample = add_pos_latent(
-                latent_sample=latent_sample, latent_control=latent_control
-            )
+
+            # Add position embedding to the latent vector for differentiating between forward/backward
+            # latent_sample = add_pos_latent(
+            #     latent_sample=latent_sample, latent_control=latent_control
+            # )
             latent_input = self.latent_out_proj(latent_sample)
 
         if self.backbones is not None:

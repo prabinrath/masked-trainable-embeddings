@@ -51,9 +51,6 @@ def main(args):
     latent_add = args["latent_add"]
     ckpt_dir = args["ckpt_dir"]
 
-    # Only remove when you handle the 0 case in DETR_VAE for when this is False.
-    assert latent_add == True
-
     # get task parameters
     is_sim = task_name[:4] == "sim_"
     from constants import SIM_TASK_CONFIGS
@@ -237,7 +234,7 @@ def eval_bc(config, ckpt_name, save_episode=True, **kwargs):
         num_queries = policy_config["num_queries"]
 
     max_timesteps = int(max_timesteps * 1)  # may increase for real-world tasks
-    num_rollouts = 5
+    num_rollouts = 50
     latent_add = kwargs.get("latent_add", False)  # check for latent_add
 
     # load simulation environment
