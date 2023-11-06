@@ -7,6 +7,7 @@ SIM_TASK_CONFIGS = {
     "sim_box_open": {
         "rlbench_env": [OpenBox],
         "dataset_dir": DATA_DIR + "/sim_open_close",
+        # "dataset_dir": DATA_DIR + "/sim_open_close_1k",
         "num_episodes": 100,
         "episode_len": 250,
         "camera_names": [
@@ -19,6 +20,7 @@ SIM_TASK_CONFIGS = {
     "sim_box_close": {
         "rlbench_env": [CloseBox],
         "dataset_dir": DATA_DIR + "/sim_open_close",
+        # "dataset_dir": DATA_DIR + "/sim_open_close_1k",
         "num_episodes": 100,
         "episode_len": 250,
         "camera_names": [
@@ -57,7 +59,7 @@ SIM_TASK_CONFIGS = {
         "rlbench_env": [OpenBox, CloseBox],
         "dataset_dir": DATA_DIR + "/sim_open_close",
         "num_episodes": 200,
-        "episode_len": 250,
+        "episode_len": 500,
         "camera_names": [
             "front_rgb",
             "left_shoulder_rgb",
@@ -70,7 +72,7 @@ SIM_TASK_CONFIGS = {
         "rlbench_env": [OpenDoor, CloseDoor],
         "dataset_dir": DATA_DIR + "/sim_open_close",
         "num_episodes": 200,
-        "episode_len": 250,
+        "episode_len": 500,
         "camera_names": [
             "front_rgb",
             "left_shoulder_rgb",

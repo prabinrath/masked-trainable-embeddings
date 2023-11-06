@@ -6,6 +6,7 @@ import glob
 import os
 import random
 import re
+from functools import partial
 
 CONFIG_DIM = 7  # joint space
 
@@ -68,6 +69,8 @@ class ReverseTrajDataset(Dataset):
         required_data_keys,
         chunk_size=100,
         norm_bound=None,
+        latent_add=False,
+        sampler=partial(np.random.uniform, 0, 1),  # partial function
     ):
         self.file_list = file_list
         self.required_data_keys = required_data_keys
@@ -77,6 +80,8 @@ class ReverseTrajDataset(Dataset):
         else:
             self.normalizer = None
         self.len = len(self.file_list)
+        self.sampler = sampler
+        self.latent_add=latent_add
 
     def __len__(self):
         return self.len
@@ -93,7 +98,9 @@ class ReverseTrajDataset(Dataset):
             assert all([req_key in valid_keys for req_key in self.required_data_keys])
 
             episode_len = len(demo[valid_keys[0]])
-            start_ts = np.random.choice(episode_len)
+            # start_ts = np.random.choice(episode_len)
+            # Sample start_ts from a distribution
+            start_ts = int(self.sampler() * episode_len)
             end_ts = min(episode_len, start_ts + self.chunk_size)
 
             image_dict = {}
@@ -136,16 +143,19 @@ class ReverseTrajDataset(Dataset):
             is_pad = np.ones((self.chunk_size))
             is_pad[: end_ts - start_ts] = 0
             data_batch["is_pad"] = torch.from_numpy(is_pad).bool()
-            if "demo_backward" in self.file_list[index]:
-                data_batch["latent_control"] = 0
-            elif "demo_forward" in self.file_list[index]:
-                data_batch["latent_control"] = 1
+            if self.latent_add:
+                if "backward" in self.file_list[index]:
+                    data_batch["latent_control"] = torch.tensor(-1)
+                elif "forward" in self.file_list[index]:
+                    data_batch["latent_control"] = torch.tensor(1)
+            else:
+                data_batch["latent_control"] = torch.tensor(0) # no latent control
 
         assert data_batch["images"].shape == torch.Size([4, 3, 128, 128])
         assert data_batch["is_pad"].shape == torch.Size([self.chunk_size])
         assert data_batch["joint_action"].shape == torch.Size([self.chunk_size, 7])
         assert data_batch["gripper_action"].shape == torch.Size([self.chunk_size])
-        assert "latent_control" in data_batch
+        assert data_batch["latent_control"].shape == torch.Size([])
 
         return data_batch
 
@@ -165,6 +175,7 @@ def load_data(
     norm_bound=None,
     batch_size=8,
     train_split=0.8,
+    latent_add=False
 ):
     """
     Method to return a Dataloader of manipulator demonstrations
@@ -217,17 +228,21 @@ def load_data(
     random.shuffle(file_list)
 
     split_idx = int(len(file_list) * train_split)
+    # print("Sampling train dataset from a beta distribution: 1.5, 1.5")
     train_dataset = ReverseTrajDataset(
         file_list=file_list[:split_idx],
         required_data_keys=required_data_keys,
         chunk_size=chunk_size,
         norm_bound=norm_bound,
+        latent_add=latent_add
+        # sampler=partial(np.random.beta, 1.5, 1.5),
     )
     val_dataset = ReverseTrajDataset(
         file_list=file_list[split_idx:],
         required_data_keys=required_data_keys,
         chunk_size=chunk_size,
         norm_bound=norm_bound,
+        latent_add=latent_add
     )
 
     train_loader = DataLoader(

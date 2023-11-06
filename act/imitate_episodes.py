@@ -18,7 +18,8 @@ from utils import (
 from policy import ACTPolicy, CNNMLPPolicy
 
 import sys
-sys.path.append('act/act/')
+
+sys.path.append("act/act/")
 
 from rl_bench.torch_data import ReverseTrajDataset
 from rl_bench.torch_data import load_data as load_rlbench_data
@@ -40,17 +41,15 @@ FRANKA_JOINT_LIMITS = np.asarray(
 
 def main(args):
     set_seed(1)
-    description = 'sin_latent_encoding'
     # command line parameters
     is_eval = args["eval"]
     policy_class = args["policy_class"]
     onscreen_render = args["onscreen_render"]
     task_name = args["task_name"]
-    batch_size_train = args["batch_size"]
-    batch_size_val = args["batch_size"]
+    batch_size = args["batch_size"]
     num_epochs = args["num_epochs"]
-    is_latent = args["latent_control"]
-    ckpt_dir = f'{args["ckpt_dir"]}{task_name}_{description}'
+    latent_add = args["latent_add"]
+    ckpt_dir = args["ckpt_dir"]
 
     # get task parameters
     is_sim = task_name[:4] == "sim_"
@@ -84,7 +83,6 @@ def main(args):
             "nheads": nheads,
             "camera_names": camera_names,
             "state_dim": state_dim,
-            "is_latent": is_latent,
         }
     elif policy_class == "CNNMLP":
         policy_config = {
@@ -113,12 +111,13 @@ def main(args):
         "real_robot": not is_sim,
         "rlbench_env": rlbench_env,
     }
-    # TODO add the is_latent parameter
     if is_eval:
         ckpt_names = [f"policy_best.ckpt"]
         results = []
         for ckpt_name in ckpt_names:
-            task_perfs = eval_bc(config, ckpt_name, save_episode=True)
+            task_perfs = eval_bc(
+                config, ckpt_name, save_episode=True, latent_add=latent_add
+            )
             for key in task_perfs.keys():
                 results.append([key, task_perfs[key]])
 
@@ -143,6 +142,8 @@ def main(args):
         ],
         chunk_size=args["chunk_size"],
         norm_bound=FRANKA_JOINT_LIMITS,
+        batch_size=batch_size,
+        latent_add=latent_add,
     )
 
     # Save configuration
@@ -195,7 +196,7 @@ def get_image(obs, camera_names):
     return curr_image, viz_out
 
 
-def eval_bc(config, ckpt_name, save_episode=True):
+def eval_bc(config, ckpt_name, save_episode=True, **kwargs):
     set_seed(1000)
     ckpt_dir = config["ckpt_dir"]
     state_dim = config["state_dim"]
@@ -234,6 +235,7 @@ def eval_bc(config, ckpt_name, save_episode=True):
 
     max_timesteps = int(max_timesteps * 1)  # may increase for real-world tasks
     num_rollouts = 50
+    latent_add = kwargs.get("latent_add", False)  # check for latent_add
 
     # load simulation environment
     obs_config = ObservationConfig()
@@ -274,9 +276,18 @@ def eval_bc(config, ckpt_name, save_episode=True):
             qpos_list = []
             target_qpos_list = []
             rewards = []
+            latent_control = 0
+            if latent_add:
+                if "open" in rlenv.__name__.lower():
+                    latent_control = 1
+                elif "close" in rlenv.__name__.lower():
+                    latent_control = -1
 
             with torch.inference_mode():
                 for t in range(max_timesteps):
+                    t_latent_control = latent_control
+                    if t >= 250:  # change sign of latent_control for the reverse task
+                        t_latent_control = latent_control * -1
                     joint_position = pre_process(obs.joint_positions)
                     qpos_numpy = np.array(np.hstack([joint_position, obs.gripper_open]))
                     qpos = torch.from_numpy(qpos_numpy).float().cuda().unsqueeze(0)
@@ -287,7 +298,9 @@ def eval_bc(config, ckpt_name, save_episode=True):
                     ### query policy
                     if config["policy_class"] == "ACT":
                         if t % query_frequency == 0:
-                            all_actions = policy(qpos, curr_image)
+                            all_actions = policy(
+                                qpos, curr_image, latent_control=[t_latent_control]
+                            )
                         if temporal_agg:
                             all_time_actions[[t], t : t + num_queries] = all_actions
                             actions_for_curr_step = all_time_actions[:, t]
@@ -389,7 +402,9 @@ def forward_pass(data, policy):
         is_pad.cuda(),
         latent_control.cuda(),
     )
-    return policy(qpos, images, latent_control, action, is_pad)  # TODO remove None
+    return policy(
+        qpos, images, actions=action, is_pad=is_pad, latent_control=latent_control
+    )  # TODO remove None
 
 
 def train_bc(train_dataloader, val_dataloader, config):
@@ -542,7 +557,7 @@ if __name__ == "__main__":
         required=False,
     )
     parser.add_argument("--temporal_agg", action="store_true")
-    parser.add_argument("--latent_control", action="store_true")
+    parser.add_argument("--latent_add", action="store_true")
 
     main(vars(parser.parse_args()))
 

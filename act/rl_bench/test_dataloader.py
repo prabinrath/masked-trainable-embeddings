@@ -32,7 +32,7 @@ def main():
     )
 
     for train_data in train_loader:
-        pass
+        break
 
 
 main()

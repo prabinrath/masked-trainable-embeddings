@@ -33,50 +33,16 @@ def get_sinusoid_encoding_table(n_position, d_hid):
     return torch.FloatTensor(sinusoid_table).unsqueeze(0)
 
 
-def getPositionEncoding(seq_len, d, latent, n=10000):
-    """ 
-    To see if implementing a normal positional embedding with the backwards 
-    as the reverse function of the forward embedding would be better or not.
-    Example reverse of sin(x) = -sin(x) and reverse of cos(x) = cos(-x).
-    So, would it be better if we try inputting the reverse function in the 
-    normal position embeddings.
+def add_pos_latent(latent_sample, latent_control):
     """
-    # Implementation taken from https://machinelearningmastery.com/a-gentle-introduction-to-positional-encoding-in-transformer-models-part-1/
-    P = np.zeros((seq_len, d))
-    for k in range(seq_len):
-        for i in np.arange(int(d/2)):
-            denominator = np.power(n, 2*i/d)
-            # based on the latent we either get a sin or cos latent
-            if latent ==0:
-                P[k, 2*i] = np.sin(k/denominator)
-                P[k, 2*i+1] = np.sin(k/denominator)
-            else:
-                P[k, 2*i] = np.cos(k/denominator)
-                P[k, 2*i+1] = np.cos(k/denominator)
-        
-    return P
-
-def getEmbeddedLatent(pos_latent,latent_sample,latent_control):
+    Add position encoding to the latent sample.
+    latent_sample is assumed to be batch_size x latent_dim
+    Index for latent_control:
+    1 for forward
+    -1 for backward
+    0 for neither
     """
-        0 for backward
-        1 for forwad
-    """
-    # Calculate both the forward and the backward embeddings
-    pos_forward=getPositionEncoding(latent_sample.shape[1],latent_sample.shape[1],latent=1)
-    pos_backward=getPositionEncoding(latent_sample.shape[1],latent_sample.shape[1],latent=0)
-    
-    for i in range(len(latent_control)):
-    # find the latent embedding based on the current latent control variable
-        if latent_control[i] == 0:
-            latent_embedding = pos_backward
-        else:
-            latent_embedding = pos_forward
-        # Converting a 32,32 to a 32,1 array
-        pos_latent[i] = np.sum(latent_embedding,axis=1)/32
-    # Converting a numpy array to the same tensor array as pos_latent
-    pos_latent=torch.tensor(pos_latent,device=latent_sample.device,dtype=latent_sample.dtype)
-
-    return pos_latent
+    pass  # TODO: Asah
 
 
 class DETRVAE(nn.Module):
@@ -90,7 +56,6 @@ class DETRVAE(nn.Module):
         state_dim,
         num_queries,
         camera_names,
-        is_latent,
     ):
         """Initializes the model.
         Parameters:
@@ -100,7 +65,7 @@ class DETRVAE(nn.Module):
             num_queries: number of object queries, ie detection slot. This is the maximal number of objects
                          DETR can detect in a single image. For COCO, we recommend 100 queries.
             aux_loss: True if auxiliary decoding losses (loss at each decoder layer) are to be used.
-            is_latent: To add sin and cosine positional embeddings in latent space for conditioned Transformers.
+            latent_control: To add sine and cosine positional embeddings in latent space for conditional transformers.
         """
         super().__init__()
         self.num_queries = num_queries
@@ -111,7 +76,6 @@ class DETRVAE(nn.Module):
         self.action_head = nn.Linear(hidden_dim, state_dim)
         self.is_pad_head = nn.Linear(hidden_dim, 1)
         self.query_embed = nn.Embedding(num_queries, hidden_dim)
-        self.is_latent = is_latent
 
         if backbones is not None:
             self.input_proj = nn.Conv2d(
@@ -150,14 +114,16 @@ class DETRVAE(nn.Module):
             2, hidden_dim
         )  # learned position embedding for proprio and latent
 
-    def forward(self, qpos, image, latent_control, env_state, actions=None, is_pad=None):
+    def forward(self, qpos, image, env_state, actions=None, is_pad=None, **kwargs):
         """
         qpos: batch, qpos_dim
         image: batch, num_cam, channel, height, width
         env_state: None
         actions: batch, seq, action_dim
         """
-        # breakpoint()
+        latent_control = kwargs[
+            "latent_control"
+        ]  # influence the latent vector for forward/backward traj
         is_training = actions is not None  # train or val
         bs, _ = qpos.shape
         ### Obtain latent z from action sequence
@@ -191,21 +157,26 @@ class DETRVAE(nn.Module):
             mu = latent_info[:, : self.latent_dim]
             logvar = latent_info[:, self.latent_dim :]
             latent_sample = reparametrize(mu, logvar)
-            
-            #TODO Latent position embedding
-            pos_latent=np.zeros((len(latent_control),32))
-            # Calling for latent Embedding here 
-            pos_latent=getEmbeddedLatent(pos_latent, latent_sample, latent_control)
-            # Adding the embedding to the latent space
-            latent_sample=latent_sample+pos_latent
-
+            # Add position embedding to the latent vector for differentiating between forward/backward
+            # latent_sample = add_pos_latent(
+            #     latent_sample=latent_sample, latent_control=latent_control
+            # )
             latent_input = self.latent_out_proj(latent_sample)
 
         else:
             mu = logvar = None
+            # Sample from a Gaussian
+            # latent_sample = torch.normal(
+            #     0, 1, [bs, self.latent_dim], dtype=torch.float32
+            # ).to(qpos.device)
             latent_sample = torch.zeros([bs, self.latent_dim], dtype=torch.float32).to(
                 qpos.device
             )
+
+            # Add position embedding to the latent vector for differentiating between forward/backward
+            # latent_sample = add_pos_latent(
+            #     latent_sample=latent_sample, latent_control=latent_control
+            # )
             latent_input = self.latent_out_proj(latent_sample)
 
         if self.backbones is not None:
@@ -345,11 +316,8 @@ def build(args):
     backbones = []
     backbone = build_backbone(args)
     backbones.append(backbone)
-
     transformer = build_transformer(args)
-
     encoder = build_encoder(args)
-    # breakpoint()
 
     model = DETRVAE(
         backbones,
@@ -358,7 +326,6 @@ def build(args):
         state_dim=state_dim,
         num_queries=args.num_queries,
         camera_names=args.camera_names,
-        is_latent=args.is_latent,
     )
 
     n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
