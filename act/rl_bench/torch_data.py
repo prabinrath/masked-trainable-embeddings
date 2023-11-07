@@ -69,7 +69,7 @@ class ReverseTrajDataset(Dataset):
         required_data_keys,
         chunk_size=100,
         norm_bound=None,
-        latent_add=False,
+        add_task_ind=False,
         sampler=partial(np.random.uniform, 0, 1),  # partial function
     ):
         self.file_list = file_list
@@ -81,7 +81,7 @@ class ReverseTrajDataset(Dataset):
             self.normalizer = None
         self.len = len(self.file_list)
         self.sampler = sampler
-        self.latent_add=latent_add
+        self.add_task_ind = add_task_ind
 
     def __len__(self):
         return self.len
@@ -143,19 +143,19 @@ class ReverseTrajDataset(Dataset):
             is_pad = np.ones((self.chunk_size))
             is_pad[: end_ts - start_ts] = 0
             data_batch["is_pad"] = torch.from_numpy(is_pad).bool()
-            if self.latent_add:
+            if self.add_task_ind:
                 if "backward" in self.file_list[index]:
-                    data_batch["latent_control"] = torch.tensor(-1)
+                    data_batch["task_ind"] = torch.tensor(-1)
                 elif "forward" in self.file_list[index]:
-                    data_batch["latent_control"] = torch.tensor(1)
+                    data_batch["task_ind"] = torch.tensor(1)
             else:
-                data_batch["latent_control"] = torch.tensor(0) # no latent control
+                data_batch["task_ind"] = torch.tensor(0)  # no latent control
 
         assert data_batch["images"].shape == torch.Size([4, 3, 128, 128])
         assert data_batch["is_pad"].shape == torch.Size([self.chunk_size])
         assert data_batch["joint_action"].shape == torch.Size([self.chunk_size, 7])
         assert data_batch["gripper_action"].shape == torch.Size([self.chunk_size])
-        assert data_batch["latent_control"].shape == torch.Size([])
+        assert data_batch["task_ind"].shape == torch.Size([])
 
         return data_batch
 
@@ -175,7 +175,7 @@ def load_data(
     norm_bound=None,
     batch_size=8,
     train_split=0.8,
-    latent_add=False
+    add_task_ind=False,
 ):
     """
     Method to return a Dataloader of manipulator demonstrations
@@ -234,7 +234,7 @@ def load_data(
         required_data_keys=required_data_keys,
         chunk_size=chunk_size,
         norm_bound=norm_bound,
-        latent_add=latent_add
+        add_task_ind=add_task_ind
         # sampler=partial(np.random.beta, 1.5, 1.5),
     )
     val_dataset = ReverseTrajDataset(
@@ -242,7 +242,7 @@ def load_data(
         required_data_keys=required_data_keys,
         chunk_size=chunk_size,
         norm_bound=norm_bound,
-        latent_add=latent_add
+        add_task_ind=add_task_ind,
     )
 
     train_loader = DataLoader(
