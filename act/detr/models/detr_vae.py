@@ -100,9 +100,12 @@ class DETRVAE(nn.Module):
         self.latent_out_proj = nn.Linear(
             self.latent_dim, hidden_dim
         )  # project latent sample to embedding
+        self.skill_out_proj = nn.Linear(
+            1, hidden_dim
+        )  # project skill to embedding
         self.additional_pos_embed = nn.Embedding(
-            2, hidden_dim
-        )  # learned position embedding for proprio and latent
+            3, hidden_dim
+        )  # learned position embedding for proprio, latent and skill
 
     def forward(self, qpos, image, env_state, actions=None, is_pad=None, **kwargs):
         """
@@ -128,13 +131,13 @@ class DETRVAE(nn.Module):
             )  # (bs, 1, hidden_dim)
             encoder_input = torch.cat(
                 [cls_embed, qpos_embed, action_embed], axis=1
-            )  # (bs, seq+1, hidden_dim)
-            encoder_input = encoder_input.permute(1, 0, 2)  # (seq+1, bs, hidden_dim)
+            )  # (bs, seq+2, hidden_dim)
+            encoder_input = encoder_input.permute(1, 0, 2)  # (seq+2, bs, hidden_dim)
             # do not mask cls token
             cls_joint_is_pad = torch.full((bs, 2), False).to(
                 qpos.device
             )  # False: not a padding
-            is_pad = torch.cat([cls_joint_is_pad, is_pad], axis=1)  # (bs, seq+1)
+            is_pad = torch.cat([cls_joint_is_pad, is_pad], axis=1)  # (bs, seq+2)
             # obtain position embedding
             pos_embed = self.pos_table.clone().detach()
             pos_embed = pos_embed.permute(1, 0, 2)  # (seq+1, 1, hidden_dim)
@@ -148,6 +151,9 @@ class DETRVAE(nn.Module):
             logvar = latent_info[:, self.latent_dim :]
             latent_sample = reparametrize(mu, logvar)
             latent_input = self.latent_out_proj(latent_sample)
+
+            # TODO: condition on the skill
+            skill_input = self.skill_out_proj(task_ind.unsqueeze(-1).float())
 
         else:
             mu = logvar = None
@@ -184,6 +190,7 @@ class DETRVAE(nn.Module):
                 pos,
                 latent_input,
                 proprio_input,
+                skill_input,
                 self.additional_pos_embed.weight,
             )[0]
         else:
