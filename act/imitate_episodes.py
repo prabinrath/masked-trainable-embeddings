@@ -48,7 +48,7 @@ def main(args):
     task_name = args["task_name"]
     batch_size = args["batch_size"]
     num_epochs = args["num_epochs"]
-    latent_add = args["latent_add"]
+    add_task_ind = args["add_task_ind"]
     ckpt_dir = args["ckpt_dir"]
 
     # get task parameters
@@ -116,7 +116,7 @@ def main(args):
         results = []
         for ckpt_name in ckpt_names:
             task_perfs = eval_bc(
-                config, ckpt_name, save_episode=True, latent_add=latent_add
+                config, ckpt_name, save_episode=True, add_task_ind=add_task_ind
             )
             for key in task_perfs.keys():
                 results.append([key, task_perfs[key]])
@@ -143,7 +143,7 @@ def main(args):
         chunk_size=args["chunk_size"],
         norm_bound=FRANKA_JOINT_LIMITS,
         batch_size=batch_size,
-        latent_add=latent_add,
+        add_task_ind=add_task_ind,
     )
 
     # Save configuration
@@ -235,7 +235,7 @@ def eval_bc(config, ckpt_name, save_episode=True, **kwargs):
 
     max_timesteps = int(max_timesteps * 1)  # may increase for real-world tasks
     num_rollouts = 50
-    latent_add = kwargs.get("latent_add", False)  # check for latent_add
+    add_task_ind = kwargs.get("add_task_ind", False)  # check for add_task_ind
 
     # load simulation environment
     obs_config = ObservationConfig()
@@ -276,18 +276,18 @@ def eval_bc(config, ckpt_name, save_episode=True, **kwargs):
             qpos_list = []
             target_qpos_list = []
             rewards = []
-            latent_control = 0
-            if latent_add:
+            task_ind = 0
+            if add_task_ind:
                 if "open" in rlenv.__name__.lower():
-                    latent_control = 1
+                    task_ind = 1
                 elif "close" in rlenv.__name__.lower():
-                    latent_control = -1
+                    task_ind = -1
 
             with torch.inference_mode():
                 for t in range(max_timesteps):
-                    t_latent_control = latent_control
-                    if t >= 250:  # change sign of latent_control for the reverse task
-                        t_latent_control = latent_control * -1
+                    t_task_ind = task_ind
+                    if t >= 250:  # change sign of task_ind for the reverse task
+                        t_task_ind = task_ind * -1
                     joint_position = pre_process(obs.joint_positions)
                     qpos_numpy = np.array(np.hstack([joint_position, obs.gripper_open]))
                     qpos = torch.from_numpy(qpos_numpy).float().cuda().unsqueeze(0)
@@ -299,7 +299,7 @@ def eval_bc(config, ckpt_name, save_episode=True, **kwargs):
                     if config["policy_class"] == "ACT":
                         if t % query_frequency == 0:
                             all_actions = policy(
-                                qpos, curr_image, latent_control=[t_latent_control]
+                                qpos, curr_image, task_ind=[t_task_ind]
                             )
                         if temporal_agg:
                             all_time_actions[[t], t : t + num_queries] = all_actions
@@ -387,7 +387,7 @@ def forward_pass(data, policy):
     joint_action = data["joint_action"]
     is_pad = data["is_pad"]
     gripper_action = data["gripper_action"]
-    latent_control = data["latent_control"]
+    task_ind = data["task_ind"]
 
     # Append gripper action to joint action
     action = torch.concatenate((joint_action, gripper_action.unsqueeze(-1)), 2)
@@ -395,15 +395,15 @@ def forward_pass(data, policy):
     # Get the current joint state
     qpos = action[:, 0, :]
 
-    images, qpos, action, is_pad, latent_control = (
+    images, qpos, action, is_pad, task_ind = (
         images.cuda(),
         qpos.cuda(),
         action.cuda(),
         is_pad.cuda(),
-        latent_control.cuda(),
+        task_ind.cuda(),
     )
     return policy(
-        qpos, images, actions=action, is_pad=is_pad, latent_control=latent_control
+        qpos, images, actions=action, is_pad=is_pad, task_ind=task_ind
     )  # TODO remove None
 
 
@@ -557,7 +557,7 @@ if __name__ == "__main__":
         required=False,
     )
     parser.add_argument("--temporal_agg", action="store_true")
-    parser.add_argument("--latent_add", action="store_true")
+    parser.add_argument("--add_task_ind", action="store_true")
 
     main(vars(parser.parse_args()))
 

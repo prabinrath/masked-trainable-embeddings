@@ -33,18 +33,6 @@ def get_sinusoid_encoding_table(n_position, d_hid):
     return torch.FloatTensor(sinusoid_table).unsqueeze(0)
 
 
-def add_pos_latent(latent_sample, latent_control):
-    """
-    Add position encoding to the latent sample.
-    latent_sample is assumed to be batch_size x latent_dim
-    Index for latent_control:
-    1 for forward
-    -1 for backward
-    0 for neither
-    """
-    pass  # TODO: Asah
-
-
 class DETRVAE(nn.Module):
     """This is the DETR module that performs object detection"""
 
@@ -65,7 +53,7 @@ class DETRVAE(nn.Module):
             num_queries: number of object queries, ie detection slot. This is the maximal number of objects
                          DETR can detect in a single image. For COCO, we recommend 100 queries.
             aux_loss: True if auxiliary decoding losses (loss at each decoder layer) are to be used.
-            latent_control: To add sine and cosine positional embeddings in latent space for conditional transformers.
+            task_ind: Use the provided task indicator (from data_gen) in the model
         """
         super().__init__()
         self.num_queries = num_queries
@@ -82,9 +70,11 @@ class DETRVAE(nn.Module):
                 backbones[0].num_channels, hidden_dim, kernel_size=1
             )
             self.backbones = nn.ModuleList(backbones)
-            self.input_proj_robot_state = nn.Linear(state_dim, hidden_dim)
+            self.input_proj_robot_state = nn.Linear(
+                state_dim - 1, hidden_dim
+            )  # removing gripper state from decoder qpos
         else:
-            # input_dim = state_dim + 7 # robot_state + env_state => ??
+            # input_dim = state_dim + 7  # robot_state + env_state
             self.input_proj_robot_state = nn.Linear(state_dim, hidden_dim)
             self.input_proj_env_state = nn.Linear(7, hidden_dim)
             self.pos = torch.nn.Embedding(2, hidden_dim)
@@ -121,8 +111,8 @@ class DETRVAE(nn.Module):
         env_state: None
         actions: batch, seq, action_dim
         """
-        latent_control = kwargs[
-            "latent_control"
+        task_ind = kwargs[
+            "task_ind"
         ]  # influence the latent vector for forward/backward traj
         is_training = actions is not None  # train or val
         bs, _ = qpos.shape
@@ -157,10 +147,6 @@ class DETRVAE(nn.Module):
             mu = latent_info[:, : self.latent_dim]
             logvar = latent_info[:, self.latent_dim :]
             latent_sample = reparametrize(mu, logvar)
-            # Add position embedding to the latent vector for differentiating between forward/backward
-            # latent_sample = add_pos_latent(
-            #     latent_sample=latent_sample, latent_control=latent_control
-            # )
             latent_input = self.latent_out_proj(latent_sample)
 
         else:
@@ -172,11 +158,6 @@ class DETRVAE(nn.Module):
             latent_sample = torch.zeros([bs, self.latent_dim], dtype=torch.float32).to(
                 qpos.device
             )
-
-            # Add position embedding to the latent vector for differentiating between forward/backward
-            # latent_sample = add_pos_latent(
-            #     latent_sample=latent_sample, latent_control=latent_control
-            # )
             latent_input = self.latent_out_proj(latent_sample)
 
         if self.backbones is not None:
@@ -190,7 +171,9 @@ class DETRVAE(nn.Module):
                 all_cam_features.append(self.input_proj(features))
                 all_cam_pos.append(pos)
             # proprioception features
-            proprio_input = self.input_proj_robot_state(qpos)
+            proprio_input = self.input_proj_robot_state(
+                qpos[:, :-1]
+            )  # removing gripper state from the decoder
             # fold camera dimension into width dimension
             src = torch.cat(all_cam_features, axis=3)
             pos = torch.cat(all_cam_pos, axis=3)
