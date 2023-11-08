@@ -21,7 +21,6 @@ import sys
 
 sys.path.append("act/act/")
 
-from rl_bench.torch_data import ReverseTrajDataset
 from rl_bench.torch_data import load_data as load_rlbench_data
 
 from rlbench.action_modes.action_mode import MoveArmThenGripper
@@ -137,9 +136,7 @@ def main(args):
     train_dataloader, val_dataloader = load_rlbench_data(
         dataset_dir=dataset_dir,
         required_data_keys=required_data_keys,
-        task_filter_key=ReverseTrajDataset.task_filter_map[
-            task_name.replace("sim_", "")
-        ],
+        task_name=task_name,
         chunk_size=args["chunk_size"],
         norm_bound=FRANKA_JOINT_LIMITS,
         batch_size=batch_size,
