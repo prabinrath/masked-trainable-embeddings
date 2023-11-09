@@ -286,8 +286,6 @@ def eval_bc(config, ckpt_name, save_episode=True, **kwargs):
             with torch.inference_mode():
                 for t in range(max_timesteps):
                     t_task_ind = task_ind
-                    if t >= 250:  # change sign of task_ind for the reverse task
-                        t_task_ind = task_ind * -1
                     joint_position = pre_process(obs.joint_positions)
                     qpos_numpy = np.array(np.hstack([joint_position, obs.gripper_open]))
                     qpos = torch.from_numpy(qpos_numpy).float().cuda().unsqueeze(0)
@@ -299,7 +297,7 @@ def eval_bc(config, ckpt_name, save_episode=True, **kwargs):
                     if config["policy_class"] == "ACT":
                         if t % query_frequency == 0:
                             all_actions = policy(
-                                qpos, curr_image, task_ind=[t_task_ind]
+                                qpos, curr_image, task_ind=torch.as_tensor([t_task_ind], device=qpos.device)
                             )
                         if temporal_agg:
                             all_time_actions[[t], t : t + num_queries] = all_actions

@@ -152,8 +152,6 @@ class DETRVAE(nn.Module):
             latent_sample = reparametrize(mu, logvar)
             latent_input = self.latent_out_proj(latent_sample)
 
-            # TODO: condition on the skill
-            skill_input = self.skill_out_proj(task_ind.unsqueeze(-1).float())
 
         else:
             mu = logvar = None
@@ -165,6 +163,9 @@ class DETRVAE(nn.Module):
                 qpos.device
             )
             latent_input = self.latent_out_proj(latent_sample)
+
+        # TODO: condition on the skill
+        skill_input = self.skill_out_proj(task_ind.unsqueeze(-1).float())
 
         if self.backbones is not None:
             # Image observation features and position embeddings
