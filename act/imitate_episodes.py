@@ -50,6 +50,7 @@ def main(args):
     num_epochs = args["num_epochs"]
     add_task_ind = args["add_task_ind"]
     ckpt_dir = args["ckpt_dir"]
+    ckpt_names = args["ckpt_names"]
 
     # get task parameters
     is_sim = task_name[:4] == "sim_"
@@ -112,7 +113,8 @@ def main(args):
         "rlbench_env": rlbench_env,
     }
     if is_eval:
-        ckpt_names = [f"policy_best.ckpt"]
+        if len(ckpt_names) == 0:
+            ckpt_names = [f"policy_best.ckpt"]
         results = []
         for ckpt_name in ckpt_names:
             task_perfs = eval_bc(
@@ -557,12 +559,8 @@ if __name__ == "__main__":
     parser.add_argument("--temporal_agg", action="store_true")
     parser.add_argument("--add_task_ind", action="store_true")
 
+    parser.add_argument(
+        "--ckpt_names", action="store", nargs="*", type=str, help="ckpt_names"
+    )
+
     main(vars(parser.parse_args()))
-
-
-# Command line execution
-# python3 imitate_episodes.py --task_name sim_door_close --ckpt_dir /home/local/ASUAD/opatil3/checkpoints/act_door_close_100 --policy_class ACT --kl_weight 10 --chunk_size 100 --hidden_dim 512 --batch_size 128 --dim_feedforward 3200 --num_epochs 2000 --lr 1e-5 --seed 0
-
-
-# Eval
-# python3 imitate_episodes.py --task_name sim_box_close --ckpt_dir /home/local/ASUAD/opatil3/checkpoints/act_box_close_100 --policy_class ACT --kl_weight 10 --chunk_size 100 --hidden_dim 512 --batch_size 128 --dim_feedforward 3200 --num_epochs 2000 --lr 1e-5 --seed 0 --eval --onscreen_render
