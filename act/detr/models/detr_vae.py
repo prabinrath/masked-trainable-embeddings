@@ -169,7 +169,6 @@ class DETRVAE(nn.Module):
         # TODO: condition on the skill
         lang_embd = self.clip_model.encode_text(task_ind)
         skill_input = self.skill_out_proj(lang_embd.float().clone().detach())
-
         if self.backbones is not None:
             # Image observation features and position embeddings
             all_cam_features = []
