@@ -8,6 +8,7 @@ from copy import deepcopy
 from tqdm import tqdm
 from einops import rearrange
 import datetime
+import clip
 
 from utils import (
     compute_dict_mean,
@@ -21,7 +22,7 @@ import sys
 
 sys.path.append("act/act/")
 
-from rl_bench.torch_data import load_data as load_rlbench_data
+from rl_bench.torch_data import load_data as load_rlbench_data, ReverseTrajDataset
 
 from rlbench.action_modes.action_mode import MoveArmThenGripper
 from rlbench.action_modes.arm_action_modes import JointVelocity, JointPosition
@@ -49,6 +50,7 @@ def main(args):
     num_epochs = args["num_epochs"]
     add_task_ind = args["add_task_ind"]
     ckpt_dir = args["ckpt_dir"]
+    ckpt_names = args["ckpt_names"]
 
     # get task parameters
     is_sim = task_name[:4] == "sim_"
@@ -111,7 +113,8 @@ def main(args):
         "rlbench_env": rlbench_env,
     }
     if is_eval:
-        ckpt_names = [f"policy_best.ckpt"]
+        if len(ckpt_names) == 0:
+            ckpt_names = [f"policy_best.ckpt"]
         results = []
         for ckpt_name in ckpt_names:
             task_perfs = eval_bc(
@@ -204,6 +207,7 @@ def eval_bc(config, ckpt_name, save_episode=True, **kwargs):
     max_timesteps = config["episode_len"]
     temporal_agg = config["temporal_agg"]
     rlbench_env = config["rlbench_env"]
+    task_name = config["task_name"]
 
     # load policy and stats
     ckpt_path = os.path.join(ckpt_dir, ckpt_name)
@@ -273,18 +277,25 @@ def eval_bc(config, ckpt_name, save_episode=True, **kwargs):
             qpos_list = []
             target_qpos_list = []
             rewards = []
-            task_ind = 0
+            task_description = (
+                f'a robot trying to manipulate the {task_name.replace("sim_", "")}'
+            )
             if add_task_ind:
                 if "open" in rlenv.__name__.lower():
-                    task_ind = 1
+                    task_description = (
+                        f'a robot trying to open the {task_name.replace("sim_", "")}'
+                    )
                 elif "close" in rlenv.__name__.lower():
-                    task_ind = -1
+                    task_description = (
+                        f'a robot trying to close the {task_name.replace("sim_", "")}'
+                    )
+            text_tokens = clip.tokenize([task_description]).cuda()
 
             with torch.inference_mode():
                 for t in range(max_timesteps):
-                    t_task_ind = task_ind
-                    if t >= 250:  # change sign of task_ind for the reverse task
-                        t_task_ind = task_ind * -1
+                    t_task_ind = text_tokens
+                    # if t >= 250:  # change sign of task_ind for the reverse task
+                    #     t_task_ind = task_ind * -1
                     joint_position = pre_process(obs.joint_positions)
                     qpos_numpy = np.array(np.hstack([joint_position, obs.gripper_open]))
                     qpos = torch.from_numpy(qpos_numpy).float().cuda().unsqueeze(0)
@@ -295,9 +306,7 @@ def eval_bc(config, ckpt_name, save_episode=True, **kwargs):
                     ### query policy
                     if config["policy_class"] == "ACT":
                         if t % query_frequency == 0:
-                            all_actions = policy(
-                                qpos, curr_image, task_ind=[t_task_ind]
-                            )
+                            all_actions = policy(qpos, curr_image, task_ind=t_task_ind)
                         if temporal_agg:
                             all_time_actions[[t], t : t + num_queries] = all_actions
                             actions_for_curr_step = all_time_actions[:, t]
@@ -556,12 +565,8 @@ if __name__ == "__main__":
     parser.add_argument("--temporal_agg", action="store_true")
     parser.add_argument("--add_task_ind", action="store_true")
 
+    parser.add_argument(
+        "--ckpt_names", action="store", nargs="*", type=str, help="ckpt_names"
+    )
+
     main(vars(parser.parse_args()))
-
-
-# Command line execution
-# python3 imitate_episodes.py --task_name sim_door_close --ckpt_dir /home/local/ASUAD/opatil3/checkpoints/act_door_close_100 --policy_class ACT --kl_weight 10 --chunk_size 100 --hidden_dim 512 --batch_size 128 --dim_feedforward 3200 --num_epochs 2000 --lr 1e-5 --seed 0
-
-
-# Eval
-# python3 imitate_episodes.py --task_name sim_box_close --ckpt_dir /home/local/ASUAD/opatil3/checkpoints/act_box_close_100 --policy_class ACT --kl_weight 10 --chunk_size 100 --hidden_dim 512 --batch_size 128 --dim_feedforward 3200 --num_epochs 2000 --lr 1e-5 --seed 0 --eval --onscreen_render
