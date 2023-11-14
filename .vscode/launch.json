@@ -1,0 +1,48 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Act Train",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/act/imitate_episodes.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "args": ["--task_name",  "sim_box", 
+                     "--ckpt_dir", "/home/local/ASUAD/prath4/Repos/latent-actions/checkpoints/act_box_lang_simple_100", 
+                     "--policy_class", "ACT", 
+                     "--kl_weight", "10", 
+                     "--chunk_size", "100", 
+                     "--hidden_dim", "512", 
+                     "--batch_size", "8", 
+                     "--dim_feedforward", "3200", 
+                     "--num_epochs", "2000", 
+                     "--lr", "1e-5", 
+                     "--seed", "0",
+                     "--add_task_ind"]
+        },
+        {
+            "name": "Act Test",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/act/imitate_episodes.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "args": ["--task_name",  "sim_door", 
+                     "--ckpt_dir", "/home/local/ASUAD/prath4/Repos/latent-actions/checkpoints/act_door_binary_100", 
+                     "--policy_class", "ACT", 
+                     "--kl_weight", "10", 
+                     "--chunk_size", "100", 
+                     "--hidden_dim", "512", 
+                     "--batch_size", "8", 
+                     "--dim_feedforward", "3200", 
+                     "--num_epochs", "2000", 
+                     "--lr", "1e-5", 
+                     "--seed", "0",
+                     "--eval", "--onscreen_render", "--add_task_ind"]
+        }
+    ]
+}
