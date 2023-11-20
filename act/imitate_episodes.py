@@ -113,6 +113,7 @@ def main(args):
         "rlbench_env": rlbench_env,
     }
     if is_eval:
+        print(f"Evaluating for {ckpt_names}")
         if len(ckpt_names) == 0:
             ckpt_names = [f"policy_best.ckpt"]
         results = []
@@ -284,10 +285,12 @@ def eval_bc(config, ckpt_name, save_episode=True, **kwargs):
                 if "open" in rlenv.__name__.lower():
                     task_description = (
                         f'a robot trying to open the {task_name.replace("sim_", "")}'
+                        # "open"
                     )
                 elif "close" in rlenv.__name__.lower():
                     task_description = (
                         f'a robot trying to close the {task_name.replace("sim_", "")}'
+                        # "close"
                     )
             text_tokens = clip.tokenize([task_description]).cuda()
 
@@ -565,8 +568,6 @@ if __name__ == "__main__":
     parser.add_argument("--temporal_agg", action="store_true")
     parser.add_argument("--add_task_ind", action="store_true")
 
-    parser.add_argument(
-        "--ckpt_names", action="store", nargs="*", type=str, help="ckpt_names"
-    )
+    parser.add_argument("--ckpt_names", action="store", nargs="*", help="ckpt_names")
 
     main(vars(parser.parse_args()))
