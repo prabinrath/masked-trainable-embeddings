@@ -7,6 +7,7 @@ import os
 import random
 import re
 from functools import partial
+import clip
 
 CONFIG_DIM = 7  # joint space
 
@@ -54,7 +55,18 @@ class ReverseTrajDataset(Dataset):
         "door_open": re.compile(r"forward_[\d]*2.pickle"),
         "door_close": re.compile(r"backward_[\d]*2.pickle"),
         "door": re.compile(r"[a-zA-Z_]*[\d]*2.pickle"),
+        "toilet_seat_up": re.compile(r"forward_[\d]*3.pickle"),
+        "toilet_seat_down": re.compile(r"backward_[\d]*3.pickle"),
+        "toilet_seat": re.compile(r"[a-zA-Z_]*[\d]*3.pickle"),
     }
+
+    # Task specific skill mapping
+    skill_map = {
+        "box": {"forward": "open", "backward": "close"},
+        "door": {"forward": "open", "backward": "close"},
+        "toilet_seat": {"forward": "open", "backward": "close"},
+    }
+
     # This order needs to be consistent with what you pass while training
     camera_names = [
         "front_rgb",
@@ -70,6 +82,7 @@ class ReverseTrajDataset(Dataset):
         chunk_size=100,
         norm_bound=None,
         add_task_ind=False,
+        task_name=None,
         sampler=partial(np.random.uniform, 0, 1),  # partial function
     ):
         self.file_list = file_list
@@ -82,6 +95,7 @@ class ReverseTrajDataset(Dataset):
         self.len = len(self.file_list)
         self.sampler = sampler
         self.add_task_ind = add_task_ind
+        self.task_name = task_name
 
     def __len__(self):
         return self.len
@@ -145,24 +159,36 @@ class ReverseTrajDataset(Dataset):
             data_batch["is_pad"] = torch.from_numpy(is_pad).bool()
             if self.add_task_ind:
                 if "backward" in self.file_list[index]:
-                    data_batch["task_ind"] = torch.tensor(-1)
+                    task_description = ReverseTrajDataset.skill_map[self.task_name][
+                        "backward"
+                    ]
+                    # task_description = f'a robot trying to {ReverseTrajDataset.skill_map[self.task_name]["backward"]} the {self.task_name}'
                 elif "forward" in self.file_list[index]:
-                    data_batch["task_ind"] = torch.tensor(1)
+                    task_description = ReverseTrajDataset.skill_map[self.task_name][
+                        "forward"
+                    ]
+                    # task_description = f'a robot trying to {ReverseTrajDataset.skill_map[self.task_name]["forward"]} the {self.task_name}'
             else:
-                data_batch["task_ind"] = torch.tensor(0)  # no latent control
+                task_description = f"a robot trying to manipulate the {self.task_name}"
+            text_tokens = clip.tokenize([task_description])
+            data_batch["task_ind"] = text_tokens.squeeze()
 
         assert data_batch["images"].shape == torch.Size([4, 3, 128, 128])
         assert data_batch["is_pad"].shape == torch.Size([self.chunk_size])
         assert data_batch["joint_action"].shape == torch.Size([self.chunk_size, 7])
         assert data_batch["gripper_action"].shape == torch.Size([self.chunk_size])
-        assert data_batch["task_ind"].shape == torch.Size([])
+        assert data_batch["task_ind"].shape == torch.Size(
+            [
+                77,
+            ]
+        )
 
         return data_batch
 
 
 def load_data(
     dataset_dir,
-    task_filter_key=ReverseTrajDataset.task_filter_map["box_open"],
+    task_name="box_open",
     required_data_keys=[
         "front_rgb",
         "left_shoulder_rgb",
@@ -219,6 +245,9 @@ def load_data(
     """
 
     file_list = []
+    if "sim_" in task_name:
+        task_name = task_name.replace("sim_", "")
+    task_filter_key = ReverseTrajDataset.task_filter_map[task_name]
     for file in glob.glob(os.path.join(dataset_dir, "*.pickle")):
         if task_filter_key is None:
             file_list.append(file)
@@ -234,7 +263,8 @@ def load_data(
         required_data_keys=required_data_keys,
         chunk_size=chunk_size,
         norm_bound=norm_bound,
-        add_task_ind=add_task_ind
+        add_task_ind=add_task_ind,
+        task_name=task_name,
         # sampler=partial(np.random.beta, 1.5, 1.5),
     )
     val_dataset = ReverseTrajDataset(
@@ -243,6 +273,7 @@ def load_data(
         chunk_size=chunk_size,
         norm_bound=norm_bound,
         add_task_ind=add_task_ind,
+        task_name=task_name,
     )
 
     train_loader = DataLoader(

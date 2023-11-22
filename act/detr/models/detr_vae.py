@@ -7,6 +7,7 @@ from torch import nn
 from torch.autograd import Variable
 from .backbone import build_backbone
 from .transformer import build_transformer, TransformerEncoder, TransformerEncoderLayer
+import clip
 
 import numpy as np
 
@@ -70,9 +71,10 @@ class DETRVAE(nn.Module):
                 backbones[0].num_channels, hidden_dim, kernel_size=1
             )
             self.backbones = nn.ModuleList(backbones)
-            self.input_proj_robot_state = nn.Linear(
-                state_dim - 1, hidden_dim
-            )  # removing gripper state from decoder qpos
+            self.input_proj_robot_state = nn.Linear(state_dim, hidden_dim)
+            # self.input_proj_robot_state = nn.Linear(
+            #     state_dim - 1, hidden_dim
+            # )  # removing gripper state from decoder qpos
         else:
             # input_dim = state_dim + 7  # robot_state + env_state
             self.input_proj_robot_state = nn.Linear(state_dim, hidden_dim)
@@ -100,9 +102,14 @@ class DETRVAE(nn.Module):
         self.latent_out_proj = nn.Linear(
             self.latent_dim, hidden_dim
         )  # project latent sample to embedding
+        self.skill_out_proj = nn.Linear(
+            hidden_dim, hidden_dim
+        )  # project skill to embedding
         self.additional_pos_embed = nn.Embedding(
-            2, hidden_dim
-        )  # learned position embedding for proprio and latent
+            3, hidden_dim
+        )  # learned position embedding for proprio, latent and skill
+
+        self.clip_model, _ = clip.load("ViT-B/32")
 
     def forward(self, qpos, image, env_state, actions=None, is_pad=None, **kwargs):
         """
@@ -128,13 +135,13 @@ class DETRVAE(nn.Module):
             )  # (bs, 1, hidden_dim)
             encoder_input = torch.cat(
                 [cls_embed, qpos_embed, action_embed], axis=1
-            )  # (bs, seq+1, hidden_dim)
-            encoder_input = encoder_input.permute(1, 0, 2)  # (seq+1, bs, hidden_dim)
+            )  # (bs, seq+2, hidden_dim)
+            encoder_input = encoder_input.permute(1, 0, 2)  # (seq+2, bs, hidden_dim)
             # do not mask cls token
             cls_joint_is_pad = torch.full((bs, 2), False).to(
                 qpos.device
             )  # False: not a padding
-            is_pad = torch.cat([cls_joint_is_pad, is_pad], axis=1)  # (bs, seq+1)
+            is_pad = torch.cat([cls_joint_is_pad, is_pad], axis=1)  # (bs, seq+2)
             # obtain position embedding
             pos_embed = self.pos_table.clone().detach()
             pos_embed = pos_embed.permute(1, 0, 2)  # (seq+1, 1, hidden_dim)
@@ -160,6 +167,9 @@ class DETRVAE(nn.Module):
             )
             latent_input = self.latent_out_proj(latent_sample)
 
+        # TODO: condition on the skill
+        lang_embd = self.clip_model.encode_text(task_ind)
+        skill_input = self.skill_out_proj(lang_embd.float().clone().detach())
         if self.backbones is not None:
             # Image observation features and position embeddings
             all_cam_features = []
@@ -171,9 +181,10 @@ class DETRVAE(nn.Module):
                 all_cam_features.append(self.input_proj(features))
                 all_cam_pos.append(pos)
             # proprioception features
-            proprio_input = self.input_proj_robot_state(
-                qpos[:, :-1]
-            )  # removing gripper state from the decoder
+            proprio_input = self.input_proj_robot_state(qpos)
+            # proprio_input = self.input_proj_robot_state(
+            #     qpos[:, :-1]
+            # )  # removing gripper state from the decoder
             # fold camera dimension into width dimension
             src = torch.cat(all_cam_features, axis=3)
             pos = torch.cat(all_cam_pos, axis=3)
@@ -184,6 +195,7 @@ class DETRVAE(nn.Module):
                 pos,
                 latent_input,
                 proprio_input,
+                skill_input,
                 self.additional_pos_embed.weight,
             )[0]
         else:
