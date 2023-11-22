@@ -278,25 +278,17 @@ def eval_bc(config, ckpt_name, save_episode=True, **kwargs):
             qpos_list = []
             target_qpos_list = []
             rewards = []
-            task_description = (
-                f'a robot trying to manipulate the {task_name.replace("sim_", "")}'
-            )
+            task_ind = torch.tensor([[0, 0]], dtype=torch.float32)
             if add_task_ind:
                 if "open" in rlenv.__name__.lower():
-                    task_description = (
-                        # f'a robot trying to open the {task_name.replace("sim_", "")}'
-                        "open"
-                    )
+                    task_ind = torch.tensor([[0.0, 1.0]], dtype=torch.float32)
                 elif "close" in rlenv.__name__.lower():
-                    task_description = (
-                        # f'a robot trying to close the {task_name.replace("sim_", "")}'
-                        "close"
-                    )
-            text_tokens = clip.tokenize([task_description]).cuda()
+                    task_ind = torch.tensor([[1.0, 0.0]], dtype=torch.float32)
+            task_ind = task_ind.cuda()
 
             with torch.inference_mode():
                 for t in range(max_timesteps):
-                    t_task_ind = text_tokens
+                    t_task_ind = task_ind
                     # if t >= 250:  # change sign of task_ind for the reverse task
                     #     t_task_ind = task_ind * -1
                     joint_position = pre_process(obs.joint_positions)
