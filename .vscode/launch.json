@@ -13,9 +13,9 @@
             "justMyCode": true,
             "args": [
                 "--task_name",
-                "sim_box",
+                "sim_toilet_seat",
                 "--ckpt_dir",
-                "/home/local/ASUAD/opatil3/checkpoints/act/act_box_lang_cond",
+                "/home/local/ASUAD/opatil3/checkpoints/act/act_toilet_seat_lang_100",
                 "--policy_class",
                 "ACT",
                 "--kl_weight",
@@ -46,9 +46,9 @@
             "justMyCode": true,
             "args": [
                 "--task_name",
-                "sim_door",
+                "sim_box",
                 "--ckpt_dir",
-                "/home/local/ASUAD/opatil3/checkpoints/act/act_door_100",
+                "/home/local/ASUAD/opatil3/checkpoints/act/act_box_lang_100",
                 "--policy_class",
                 "ACT",
                 "--kl_weight",

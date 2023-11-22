@@ -55,12 +55,16 @@ class ReverseTrajDataset(Dataset):
         "door_open": re.compile(r"forward_[\d]*2.pickle"),
         "door_close": re.compile(r"backward_[\d]*2.pickle"),
         "door": re.compile(r"[a-zA-Z_]*[\d]*2.pickle"),
+        "toilet_seat_up": re.compile(r"forward_[\d]*3.pickle"),
+        "toilet_seat_down": re.compile(r"backward_[\d]*3.pickle"),
+        "toilet_seat": re.compile(r"[a-zA-Z_]*[\d]*3.pickle"),
     }
 
     # Task specific skill mapping
     skill_map = {
         "box": {"forward": "open", "backward": "close"},
         "door": {"forward": "open", "backward": "close"},
+        "toilet_seat": {"forward": "open", "backward": "close"},
     }
 
     # This order needs to be consistent with what you pass while training
@@ -155,11 +159,17 @@ class ReverseTrajDataset(Dataset):
             data_batch["is_pad"] = torch.from_numpy(is_pad).bool()
             if self.add_task_ind:
                 if "backward" in self.file_list[index]:
-                    task_description = f'a robot trying to {ReverseTrajDataset.skill_map[self.task_name]["backward"]} the {self.task_name}'
+                    task_description = ReverseTrajDataset.skill_map[self.task_name][
+                        "backward"
+                    ]
+                    # task_description = f'a robot trying to {ReverseTrajDataset.skill_map[self.task_name]["backward"]} the {self.task_name}'
                 elif "forward" in self.file_list[index]:
-                    task_description = f'a robot trying to {ReverseTrajDataset.skill_map[self.task_name]["forward"]} the {self.task_name}'
+                    task_description = ReverseTrajDataset.skill_map[self.task_name][
+                        "forward"
+                    ]
+                    # task_description = f'a robot trying to {ReverseTrajDataset.skill_map[self.task_name]["forward"]} the {self.task_name}'
             else:
-                task_description = f'a robot trying to manipulate the {self.task_name}'
+                task_description = f"a robot trying to manipulate the {self.task_name}"
             text_tokens = clip.tokenize([task_description])
             data_batch["task_ind"] = text_tokens.squeeze()
 
@@ -167,7 +177,11 @@ class ReverseTrajDataset(Dataset):
         assert data_batch["is_pad"].shape == torch.Size([self.chunk_size])
         assert data_batch["joint_action"].shape == torch.Size([self.chunk_size, 7])
         assert data_batch["gripper_action"].shape == torch.Size([self.chunk_size])
-        assert data_batch["task_ind"].shape == torch.Size([77,])
+        assert data_batch["task_ind"].shape == torch.Size(
+            [
+                77,
+            ]
+        )
 
         return data_batch
 

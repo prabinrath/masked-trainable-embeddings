@@ -284,13 +284,13 @@ def eval_bc(config, ckpt_name, save_episode=True, **kwargs):
             if add_task_ind:
                 if "open" in rlenv.__name__.lower():
                     task_description = (
-                        f'a robot trying to open the {task_name.replace("sim_", "")}'
-                        # "open"
+                        # f'a robot trying to open the {task_name.replace("sim_", "")}'
+                        "open"
                     )
                 elif "close" in rlenv.__name__.lower():
                     task_description = (
-                        f'a robot trying to close the {task_name.replace("sim_", "")}'
-                        # "close"
+                        # f'a robot trying to close the {task_name.replace("sim_", "")}'
+                        "close"
                     )
             text_tokens = clip.tokenize([task_description]).cuda()
 
