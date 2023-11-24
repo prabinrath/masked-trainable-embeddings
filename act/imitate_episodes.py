@@ -280,9 +280,9 @@ def eval_bc(config, ckpt_name, save_episode=True, **kwargs):
             rewards = []
             task_ind = torch.tensor([[0, 0]], dtype=torch.float32)
             if add_task_ind:
-                if "open" in rlenv.__name__.lower():
+                if "close" in rlenv.__name__.lower():
                     task_ind = torch.tensor([[0.0, 1.0]], dtype=torch.float32)
-                elif "close" in rlenv.__name__.lower():
+                elif "open" in rlenv.__name__.lower():
                     task_ind = torch.tensor([[1.0, 0.0]], dtype=torch.float32)
             task_ind = task_ind.cuda()
 

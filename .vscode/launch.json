@@ -13,9 +13,9 @@
             "justMyCode": true,
             "args": [
                 "--task_name",
-                "sim_box",
+                "sim_toilet_seat",
                 "--ckpt_dir",
-                "/home/local/ASUAD/opatil3/checkpoints/act/act_box_trainable_emb_temp",
+                "/home/local/ASUAD/opatil3/checkpoints/act/act_toilet_seat_trainable_emb",
                 "--policy_class",
                 "ACT",
                 "--kl_weight",

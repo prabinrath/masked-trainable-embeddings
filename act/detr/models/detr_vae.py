@@ -102,9 +102,6 @@ class DETRVAE(nn.Module):
             self.latent_dim, hidden_dim
         )  # project latent sample to embedding
         self.skill_embed = nn.Embedding(2, hidden_dim)  # learned skill embedding
-        self.skill_out_proj = nn.Linear(
-            hidden_dim, hidden_dim
-        )  # project skill to embedding
 
         self.additional_pos_embed = nn.Embedding(
             3, hidden_dim
@@ -167,12 +164,11 @@ class DETRVAE(nn.Module):
             latent_input = self.latent_out_proj(latent_sample)
 
         # TODO: condition on the skill
-        skill_cond = torch.bmm(
+        skill_input = torch.bmm(
             task_ind.unsqueeze(1),
             self.skill_embed.weight.unsqueeze(0).expand(task_ind.shape[0], -1, -1),
         ).squeeze(1)
 
-        skill_input = self.skill_out_proj(skill_cond)
         if self.backbones is not None:
             # Image observation features and position embeddings
             all_cam_features = []
