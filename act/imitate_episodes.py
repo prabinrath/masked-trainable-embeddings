@@ -1,3 +1,4 @@
+import sys
 import torch
 import numpy as np
 import os
@@ -8,8 +9,6 @@ from copy import deepcopy
 from tqdm import tqdm
 from einops import rearrange
 import datetime
-import clip
-
 from utils import (
     compute_dict_mean,
     set_seed,
@@ -17,19 +16,22 @@ from utils import (
     save_videos,
 )  # helper functions
 from policy import ACTPolicy, CNNMLPPolicy
-
-import sys
-
-sys.path.append("act/act/")
-
 from rl_bench.torch_data import load_data as load_rlbench_data, ReverseTrajDataset
-
+from rlbench.tasks import (
+    OpenDoor,
+    OpenBox,
+    CloseBox,
+    CloseDoor,
+    ToiletSeatDown,
+    ToiletSeatUp,
+)
 from rlbench.action_modes.action_mode import MoveArmThenGripper
 from rlbench.action_modes.arm_action_modes import JointVelocity, JointPosition
 from rlbench.action_modes.gripper_action_modes import Discrete
 from rlbench.environment import Environment
 from rlbench.observation_config import ObservationConfig
 
+sys.path.append("act/act/")
 FRANKA_JOINT_LIMITS = np.asarray(
     [
         [-2.8973, -1.7628, -2.8973, -3.0718, -2.8973, -0.0175, -2.8973],
@@ -37,6 +39,8 @@ FRANKA_JOINT_LIMITS = np.asarray(
     ],
     dtype=np.float32,
 ).T
+FORWARD_ENVS = {OpenDoor, OpenBox, ToiletSeatUp}
+BACKWARD_ENVS = {CloseBox, CloseDoor, ToiletSeatDown}
 
 
 def main(args):
@@ -280,9 +284,9 @@ def eval_bc(config, ckpt_name, save_episode=True, **kwargs):
             rewards = []
             task_ind = torch.tensor([[0, 0]], dtype=torch.float32)
             if add_task_ind:
-                if "open" in rlenv.__name__.lower():
+                if rlenv in BACKWARD_ENVS:
                     task_ind = torch.tensor([[0.0, 1.0]], dtype=torch.float32)
-                elif "close" in rlenv.__name__.lower():
+                elif rlenv in FORWARD_ENVS:
                     task_ind = torch.tensor([[1.0, 0.0]], dtype=torch.float32)
             task_ind = task_ind.cuda()
 

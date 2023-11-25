@@ -102,10 +102,6 @@ class DETRVAE(nn.Module):
             self.latent_dim, hidden_dim
         )  # project latent sample to embedding
         self.skill_embed = nn.Embedding(2, hidden_dim)  # learned skill embedding
-        self.skill_out_proj = nn.Linear(
-            hidden_dim, hidden_dim
-        )  # project skill to embedding
-
         self.additional_pos_embed = nn.Embedding(
             3, hidden_dim
         )  # learned position embedding for proprio, latent and skill
@@ -172,7 +168,6 @@ class DETRVAE(nn.Module):
             self.skill_embed.weight.unsqueeze(0).expand(task_ind.shape[0], -1, -1),
         ).squeeze(1)
 
-        skill_input = self.skill_out_proj(skill_cond)
         if self.backbones is not None:
             # Image observation features and position embeddings
             all_cam_features = []
@@ -198,7 +193,7 @@ class DETRVAE(nn.Module):
                 pos,
                 latent_input,
                 proprio_input,
-                skill_input,
+                skill_cond,
                 self.additional_pos_embed.weight,
             )[0]
         else:
