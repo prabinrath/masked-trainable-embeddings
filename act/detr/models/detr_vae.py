@@ -102,7 +102,6 @@ class DETRVAE(nn.Module):
             self.latent_dim, hidden_dim
         )  # project latent sample to embedding
         self.skill_embed = nn.Embedding(2, hidden_dim)  # learned skill embedding
-
         self.additional_pos_embed = nn.Embedding(
             3, hidden_dim
         )  # learned position embedding for proprio, latent and skill
@@ -164,7 +163,7 @@ class DETRVAE(nn.Module):
             latent_input = self.latent_out_proj(latent_sample)
 
         # TODO: condition on the skill
-        skill_input = torch.bmm(
+        skill_cond = torch.bmm(
             task_ind.unsqueeze(1),
             self.skill_embed.weight.unsqueeze(0).expand(task_ind.shape[0], -1, -1),
         ).squeeze(1)
@@ -194,7 +193,7 @@ class DETRVAE(nn.Module):
                 pos,
                 latent_input,
                 proprio_input,
-                skill_input,
+                skill_cond,
                 self.additional_pos_embed.weight,
             )[0]
         else:
