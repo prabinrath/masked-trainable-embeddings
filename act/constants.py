@@ -9,7 +9,7 @@ from rlbench.tasks import (
 )
 
 ### Task parameters
-DATA_DIR = "/home/local/ASUAD/opatil3/datasets/"
+DATA_DIR = "dataset"
 SIM_TASK_CONFIGS = {
     "sim_box_open": {
         "rlbench_env": [OpenBox],
