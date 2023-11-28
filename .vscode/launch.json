@@ -13,9 +13,9 @@
             "justMyCode": true,
             "args": [
                 "--task_name",
-                "sim_door",
+                "sim_drawer",
                 "--ckpt_dir",
-                "checkpoints/act_door_trainable_emb",
+                "checkpoints/act_drawer_trainable_emb",
                 "--policy_class",
                 "ACT",
                 "--kl_weight",
@@ -46,9 +46,9 @@
             "justMyCode": true,
             "args": [
                 "--task_name",
-                "sim_toilet_seat",
+                "sim_door",
                 "--ckpt_dir",
-                "checkpoints/act_box_trainable_emb",
+                "checkpoints/act_door_trainable_emb",
                 "--policy_class",
                 "ACT",
                 "--kl_weight",
