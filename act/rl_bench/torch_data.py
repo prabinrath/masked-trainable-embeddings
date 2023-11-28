@@ -57,6 +57,9 @@ class ReverseTrajDataset(Dataset):
         "toilet_seat_up": re.compile(r"forward_[\d]*3.pickle"),
         "toilet_seat_down": re.compile(r"backward_[\d]*3.pickle"),
         "toilet_seat": re.compile(r"[a-zA-Z_]*[\d]*3.pickle"),
+        "drawer_open": re.compile(r"forward_[\d]*4.pickle"),
+        "drawer_close": re.compile(r"backward_[\d]*4.pickle"),
+        "drawer": re.compile(r"[a-zA-Z_]*[\d]*4.pickle"),
     }
 
     # Task specific skill mapping

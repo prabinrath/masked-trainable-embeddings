@@ -1,12 +1,5 @@
 import pathlib
-from rlbench.tasks import (
-    OpenDoor,
-    OpenBox,
-    CloseBox,
-    CloseDoor,
-    ToiletSeatDown,
-    ToiletSeatUp,
-)
+from rlbench.tasks import *
 
 ### Task parameters
 DATA_DIR = "dataset"
@@ -113,6 +106,42 @@ SIM_TASK_CONFIGS = {
     },
     "sim_toilet_seat_down": {
         "rlbench_env": [ToiletSeatDown],
+        "dataset_dir": DATA_DIR + "/sim_open_close",
+        "num_episodes": 100,
+        "episode_len": 250,
+        "camera_names": [
+            "front_rgb",
+            "left_shoulder_rgb",
+            "right_shoulder_rgb",
+            "wrist_rgb",
+        ],
+    },
+    "sim_drawer": {
+        "rlbench_env": [OpenDrawer, CloseDrawer],
+        "dataset_dir": DATA_DIR + "/sim_open_close",
+        "num_episodes": 200,
+        "episode_len": 250,
+        "camera_names": [
+            "front_rgb",
+            "left_shoulder_rgb",
+            "right_shoulder_rgb",
+            "wrist_rgb",
+        ],
+    },
+    "sim_drawer_open": {
+        "rlbench_env": [OpenDrawer],
+        "dataset_dir": DATA_DIR + "/sim_open_close",
+        "num_episodes": 100,
+        "episode_len": 250,
+        "camera_names": [
+            "front_rgb",
+            "left_shoulder_rgb",
+            "right_shoulder_rgb",
+            "wrist_rgb",
+        ],
+    },
+    "sim_drawer_close": {
+        "rlbench_env": [CloseDrawer],
         "dataset_dir": DATA_DIR + "/sim_open_close",
         "num_episodes": 100,
         "episode_len": 250,
