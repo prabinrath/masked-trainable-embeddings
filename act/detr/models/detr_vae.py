@@ -7,7 +7,6 @@ from torch import nn
 from torch.autograd import Variable
 from .backbone import build_backbone
 from .transformer import build_transformer, TransformerEncoder, TransformerEncoderLayer
-import clip
 
 import numpy as np
 
@@ -102,14 +101,9 @@ class DETRVAE(nn.Module):
         self.latent_out_proj = nn.Linear(
             self.latent_dim, hidden_dim
         )  # project latent sample to embedding
-        self.skill_out_proj = nn.Linear(
-            hidden_dim, hidden_dim
-        )  # project skill to embedding
         self.additional_pos_embed = nn.Embedding(
-            3, hidden_dim
-        )  # learned position embedding for proprio, latent and skill
-
-        self.clip_model, _ = clip.load("ViT-B/32")
+            2, hidden_dim
+        )  # learned position embedding for proprio, latent
 
     def forward(self, qpos, image, env_state, actions=None, is_pad=None, **kwargs):
         """
@@ -167,9 +161,6 @@ class DETRVAE(nn.Module):
             )
             latent_input = self.latent_out_proj(latent_sample)
 
-        # TODO: condition on the skill
-        lang_embd = self.clip_model.encode_text(task_ind)
-        skill_input = self.skill_out_proj(lang_embd.float().clone().detach())
         if self.backbones is not None:
             # Image observation features and position embeddings
             all_cam_features = []
@@ -195,7 +186,6 @@ class DETRVAE(nn.Module):
                 pos,
                 latent_input,
                 proprio_input,
-                skill_input,
                 self.additional_pos_embed.weight,
             )[0]
         else:

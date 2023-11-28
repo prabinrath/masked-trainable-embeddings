@@ -7,7 +7,6 @@ import os
 import random
 import re
 from functools import partial
-import clip
 
 CONFIG_DIM = 7  # joint space
 
@@ -163,30 +162,14 @@ class ReverseTrajDataset(Dataset):
             is_pad[: end_ts - start_ts] = 0
             data_batch["is_pad"] = torch.from_numpy(is_pad).bool()
             if self.add_task_ind:
-                if "backward" in self.file_list[index]:
-                    task_description = ReverseTrajDataset.skill_map[self.task_name][
-                        "backward"
-                    ]
-                    # task_description = f'a robot trying to {ReverseTrajDataset.skill_map[self.task_name]["backward"]} the {self.task_name}'
-                elif "forward" in self.file_list[index]:
-                    task_description = ReverseTrajDataset.skill_map[self.task_name][
-                        "forward"
-                    ]
-                    # task_description = f'a robot trying to {ReverseTrajDataset.skill_map[self.task_name]["forward"]} the {self.task_name}'
+                pass
             else:
-                task_description = f"a robot trying to manipulate the {self.task_name}"
-            text_tokens = clip.tokenize([task_description])
-            data_batch["task_ind"] = text_tokens.squeeze()
-
+                pass
+        data_batch["task_ind"] = 0
         assert data_batch["images"].shape == torch.Size([4, 3, 128, 128])
         assert data_batch["is_pad"].shape == torch.Size([self.chunk_size])
         assert data_batch["joint_action"].shape == torch.Size([self.chunk_size, 7])
         assert data_batch["gripper_action"].shape == torch.Size([self.chunk_size])
-        assert data_batch["task_ind"].shape == torch.Size(
-            [
-                77,
-            ]
-        )
 
         return data_batch
 
