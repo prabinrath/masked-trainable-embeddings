@@ -36,7 +36,7 @@ class ReverseTrajGen:
             (PutTrayInOven, TakeTrayOutOfOven),
             (PutShoesInBox, TakeShoesOutOfBox),
             (PutPlateInColoredDishRack, TakePlateOffColoredDishRack),
-            (PutMoneyInSafe, PutMoneyInSafe),
+            (PutMoneyInSafe, TakeMoneyOutSafe),
         ],
     }
 
