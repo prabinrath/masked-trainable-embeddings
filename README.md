@@ -1,6 +1,6 @@
 # Masked Trainable Embeddings (MTE)
 
-![MTE_Poster](./Poster_Group1.pptx.png)
+![MTE_Poster](./mte.png)
 
 ### Repo Structure
 - ``imitate_episodes.py`` Train and Evaluate ACT
