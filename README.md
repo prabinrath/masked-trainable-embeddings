@@ -1,4 +1,6 @@
-# lang_conditioned_bc
+# Masked Trainable Embeddings (MTE)
+
+![MTE_Poster](./Poster_Group1.pptx.png)
 
 ### Repo Structure
 - ``imitate_episodes.py`` Train and Evaluate ACT
@@ -34,16 +36,7 @@
 
 ### Simulated experiments
 
-- Add DATA_DIR in constants file- this is where the demonstrations are stored
-  
-cd act/
-
-**task name: sim_door_open/sim_door_close**  
-python3  imitate_episodes.py --task_name sim_door_close --ckpt_dir /home/local/ASUAD/<add_location>/act_door_close_100 --policy_class ACT --kl_weight 10 --chunk_size 100 --hidden_dim 512 --batch_size 128 --dim_feedforward 3200 --num_epochs 2000  --lr 1e-5 --seed 0
-
-**task name: sim_box_close/sim_box_open**   
-python3  imitate_episodes.py --task_name sim_box_close --ckpt_dir /home/local/ASUAD/<add_location>/act_box_close_100 --policy_class ACT --kl_weight 10 --chunk_size 100 --hidden_dim 512 --batch_size 128 --dim_feedforward 3200 --num_epochs 2000  --lr 1e-5 --seed 0
-
+- Add DATA_DIR in constants file: this is where the demonstrations are stored
 - To add language conditioning, add ```--add_task_ind``` to the arguments for both training and eval
 - To evaluate the policy, run the same command but add ``--eval``. This loads the best validation checkpoint.
 - To specify the the model checkpoints for rollout, use ```--ckpt_names``` in the argument followed by the checkpoint names
